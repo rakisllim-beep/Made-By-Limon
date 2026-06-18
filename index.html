@@ -1,0 +1,3293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Arealink"/>
+<meta name="theme-color" content="#0a1120"/>
+<title>Arealink Bill Collection</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png"/>
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<!-- xlsx / jsPDF / autotable are loaded on-demand (see loadScript helper) to avoid
+     blocking the initial page load with ~1MB of JS that's only needed for export/import.
+     The Supabase SDK is loaded just before the main script at the end of <body> so it
+     no longer blocks initial HTML parsing/rendering in <head>. -->
+<style>
+.dev-credit-box{margin-top:14px;text-align:center;font-size:10px;padding:8px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);color:var(--text-dim)}
+.dev-credit-box a{color:var(--accent);text-decoration:none}
+
+
+:root{
+  --bg:#0a1120;
+  --frame:#040810;
+  --surface:#101a2e;
+  --surface-2:#0c1525;
+  --border:#1f2f4a;
+  --border-strong:#33496e;
+  --text:#eef2fb;
+  --text-dim:#7c8aa8;
+  --accent:#1e3a8a;
+  --accent-2:#06b6d4;
+  --success:#3ecf8e;
+  --warning:#e3a83c;
+  --danger:#f0635c;
+  --accent-soft:rgba(30,58,138,.18);
+  --success-soft:rgba(62,207,142,.14);
+  --warning-soft:rgba(227,168,60,.14);
+  --danger-soft:rgba(240,99,92,.14);
+  --radius:14px;
+  --shadow-card:0 1px 3px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{background:var(--frame);}
+body{background:var(--bg) radial-gradient(ellipse 900px 500px at 50% -10%,rgba(30,58,138,.08),transparent 60%);color:var(--text);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-feature-settings:"tnum" 1;-webkit-font-smoothing:antialiased;max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:75px;letter-spacing:-.1px;}
+input,select,button{font-family:inherit;}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);}
+
+/* HEADER */
+.header{
+  background:linear-gradient(135deg,#0a1628 0%,#0d2347 40%,#0a3d62 100%);
+  padding:0 20px;
+  height:64px;
+  position:sticky;top:0;z-index:50;
+  box-shadow:0 1px 0 rgba(6,182,212,.2), 0 4px 24px rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid rgba(6,182,212,.15);
+}
+.header::after{
+  content:'';
+  position:absolute;bottom:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,#06b6d4,#1e3a8a,#06b6d4,transparent);
+  opacity:.7;
+}
+.header-sub{
+  font-size:20px;font-weight:900;letter-spacing:.5px;
+  color:#fff;display:flex;align-items:center;gap:10px;
+  text-shadow:0 0 20px rgba(6,182,212,.4);
+  font-family:'Segoe UI',system-ui,sans-serif;
+}
+.header-sub span.company-name{
+  background:linear-gradient(135deg,#e0f7ff,#06b6d4);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.wifi-logo{
+  width:28px;height:28px;
+  filter:drop-shadow(0 0 6px rgba(6,182,212,.7));
+}
+
+/* TOAST */
+.toast{position:fixed;top:72px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--accent-2);border-radius:10px;padding:10px 20px;z-index:999;font-weight:600;font-size:14px;white-space:nowrap;box-shadow:0 4px 20px #0008;display:none;}
+
+/* TABS */
+.tabnav{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;
+  background:linear-gradient(180deg,var(--surface) 0%,var(--bg) 100%);
+  border-top:1px solid var(--border);
+  display:flex;z-index:50;
+  padding:6px 8px 10px;
+  gap:4px;
+  box-shadow:0 -4px 24px rgba(0,0,0,0.5);
+}
+.tabBtn{
+  flex:1;padding:8px 2px 6px;border:none;cursor:pointer;
+  background:transparent;color:var(--border-strong);
+  font-size:9.5px;font-weight:600;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  border-radius:14px;
+  transition:all .2s ease;
+  position:relative;
+  letter-spacing:.3px;
+  text-transform:uppercase;
+}
+.tabBtn-icon{
+  font-size:20px;
+  transition:transform .2s ease;
+  display:flex;align-items:center;justify-content:center;
+  width:40px;height:32px;border-radius:10px;
+  background:transparent;
+  transition:all .2s ease;
+}
+.tabBtn.active{color:var(--accent-2);font-weight:800;}
+.tabBtn.active .tabBtn-icon{
+  background:linear-gradient(135deg,rgba(30,58,138,0.25),rgba(6,182,212,0.18));
+  box-shadow:0 0 16px rgba(6,182,212,0.3), inset 0 1px 0 rgba(255,255,255,0.07);
+  transform:translateY(-2px) scale(1.08);
+}
+.tabBtn:not(.active):hover{color:var(--accent-2);}
+.tabBtn:not(.active):hover .tabBtn-icon{background:rgba(255,255,255,0.04);}
+/* Special ADD button */
+.tabBtn-add .tabBtn-icon{
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  border-radius:14px;
+  box-shadow:0 4px 16px rgba(30,58,138,0.4);
+  color:#fff;
+  font-size:22px;
+  transform:translateY(-6px);
+  width:44px;height:36px;
+}
+.tabBtn-add{color:var(--accent-2);}
+.tabBtn-add.active .tabBtn-icon{
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  box-shadow:0 4px 20px rgba(30,58,138,0.55);
+  transform:translateY(-8px) scale(1.08);
+}
+.tabBtn-add span:last-child{margin-top:4px;}
+
+/* PAGES */
+.page{display:none;padding:16px 16px 0;}
+.page.active{display:flex;flex-direction:column;gap:14px;}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-card),inset 0 1px 0 rgba(255,255,255,.025);}
+.card-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
+.card-row:last-child{border-bottom:none;}
+
+/* KPI */
+.kpi-row{display:flex;gap:10px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;flex:1;box-shadow:var(--shadow-card),inset 0 1px 0 rgba(255,255,255,.025);}
+.kpi-label{font-size:11px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1.2px;font-weight:600;}
+.kpi-value{font-size:23px;font-weight:800;letter-spacing:-.4px;}
+
+/* FORM */
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:12px;color:var(--text-dim);font-weight:600;}
+.field input,.field select{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;outline:none;width:100%;transition:border-color .15s ease;}
+.field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+
+/* BUTTONS */
+.btn{border:none;border-radius:10px;padding:12px 20px;font-weight:700;font-size:15px;cursor:pointer;width:100%;display:block;transition:filter .15s ease,transform .05s ease;}
+.btn:active{transform:scale(.98);}
+.btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;box-shadow:0 2px 10px rgba(30,58,138,.25);}
+.btn-primary:hover{filter:brightness(1.08);}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border-strong);}
+.btn-secondary:hover{background:var(--surface-2);}
+.btn-small{padding:6px 14px;font-size:13px;width:auto;border-radius:8px;}
+.btn-danger{background:var(--danger-soft);color:var(--danger);border:1px solid rgba(240,99,92,.25);}
+
+/* USER CARD */
+.user-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow-card),inset 0 1px 0 rgba(255,255,255,.025);}
+.user-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.user-name{font-weight:700;font-size:15px;}
+.user-meta{color:var(--text-dim);font-size:12px;margin-top:3px;}
+.user-amounts{display:flex;gap:14px;margin-top:10px;font-size:13px;color:var(--text-dim);flex-wrap:wrap;}
+.user-amounts b{font-weight:700;}
+.user-actions{display:flex;gap:8px;margin-top:10px;}
+
+/* PILL */
+.pill{border-radius:20px;padding:3px 10px 3px 8px;font-size:12px;font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;letter-spacing:.3px;}
+.pill::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;}
+.pill-PAID{background:var(--success-soft);color:var(--success);}
+.pill-PARTIAL{background:var(--warning-soft);color:var(--warning);}
+.pill-UNPAID{background:var(--danger-soft);color:var(--danger);}
+
+/* SECTION LABEL */
+.section-label{font-size:13px;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;}
+
+/* PROMISE TO PAY */
+.promise-alert-card{
+  background:linear-gradient(135deg,rgba(240,99,92,.10),rgba(227,168,60,.06));
+  border:1.5px solid rgba(240,99,92,.35);
+  border-radius:var(--radius);
+  padding:10px 12px;
+  box-shadow:0 0 0 3px rgba(240,99,92,.05);
+  animation:promisePulse 2.5s ease-in-out infinite;
+}
+@keyframes promisePulse{0%,100%{box-shadow:0 0 0 3px rgba(240,99,92,.05);}50%{box-shadow:0 0 0 5px rgba(240,99,92,.10);}}
+.promise-alert-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.promise-alert-title{font-size:13px;font-weight:800;color:var(--danger);display:flex;align-items:center;gap:5px;}
+.promise-list-scroll{max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;padding-right:2px;}
+.promise-list-scroll::-webkit-scrollbar{width:3px;}
+.promise-list-scroll::-webkit-scrollbar-thumb{background:rgba(240,99,92,.3);border-radius:4px;}
+.promise-item{background:var(--surface-2);border:1px solid rgba(240,99,92,.2);border-radius:8px;padding:6px 10px;cursor:pointer;transition:border-color .15s;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.promise-item:hover{border-color:rgba(240,99,92,.45);}
+.promise-item.overdue{border-color:rgba(240,99,92,.45);background:rgba(240,99,92,.05);}
+.promise-item.due-today{border-color:rgba(227,168,60,.45);background:rgba(227,168,60,.05);}
+.promise-item.upcoming{border-color:var(--border);background:var(--surface-2);}
+.promise-item-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:0;}
+.promise-item-name{font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;}
+.promise-item-meta{font-size:11px;color:var(--text-dim);}
+.promise-badge{font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;white-space:nowrap;}
+.promise-badge.overdue{background:var(--danger-soft);color:var(--danger);}
+.promise-badge.due-today{background:var(--warning-soft);color:var(--warning);}
+.promise-badge.upcoming{background:var(--accent-soft);color:var(--accent);}
+.promise-item-note{font-size:11px;color:var(--accent-2);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+.promise-item-actions{display:flex;gap:6px;margin-top:8px;}
+.promise-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;background:rgba(30,58,138,.15);color:var(--accent);border-radius:20px;padding:2px 8px;margin-top:4px;}
+
+/* PROMISE MODAL */
+.promise-modal-body{display:flex;flex-direction:column;gap:12px;margin-bottom:18px;}
+
+/* Sidebar footer – only visible in desktop layout */
+.tabnav-footer{display:none;}
+
+/* CLICKABLE BREAKDOWN ROW */
+.card-row.clickable{cursor:pointer;border-radius:8px;margin:0 -8px;padding:7px 8px;transition:background .15s ease;}
+.card-row.clickable:hover{background:var(--surface-2);}
+.card-row.clickable:active{transform:scale(.99);}
+
+/* FILTER CHIPS */
+.filter-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;-ms-overflow-style:none;scrollbar-width:none;}
+.filter-chips::-webkit-scrollbar{display:none;}
+.filter-chip{flex:none;border:none;cursor:pointer;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:700;background:var(--surface);border:1px solid var(--border);color:var(--text-dim);white-space:nowrap;display:flex;align-items:center;gap:6px;transition:all .15s ease;}
+.filter-chip span{opacity:.65;font-weight:600;}
+.filter-chip.active{background:var(--accent-soft);border-color:var(--accent);color:var(--text);}
+.filter-chip.active span{opacity:.85;color:var(--accent-2);}
+.filter-chip:hover{border-color:var(--border-strong);}
+
+/* PAGINATION */
+.pagination-bar{display:flex;justify-content:center;align-items:center;gap:6px;padding:14px 0 6px;flex-wrap:wrap;}
+.page-btn{flex:none;border:none;cursor:pointer;min-width:34px;height:34px;padding:0 8px;border-radius:10px;font-size:13px;font-weight:700;background:var(--surface);border:1px solid var(--border);color:var(--text-dim);transition:all .15s ease;}
+.page-btn.active{background:linear-gradient(90deg,var(--accent),var(--accent-2));border-color:transparent;color:#fff;}
+.page-btn:disabled{opacity:.35;cursor:default;}
+.page-btn:not(.active):not(:disabled):hover{border-color:var(--border-strong);color:var(--text);}
+.page-info{font-size:11px;color:var(--text-dim);width:100%;text-align:center;margin-top:2px;}
+
+/* COLLECTOR ROW */
+.col-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2);}
+.col-row:last-child{border-bottom:none;}
+.col-name{flex:1;font-size:14px;font-weight:600;}
+.col-input{flex:1;background:var(--surface-2);border:1px solid var(--accent-2);border-radius:7px;color:var(--text);padding:6px 10px;font-size:14px;outline:none;}
+.icon-btn{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:7px;color:var(--text);padding:5px 10px;font-size:13px;cursor:pointer;}
+.icon-btn-red{color:var(--danger);}
+
+/* BULK SELECT */
+.user-card.bulk-selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);}
+.bulk-checkbox{
+  width:20px;height:20px;border-radius:6px;border:2px solid var(--border-strong);
+  background:var(--surface-2);cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s ease;
+}
+.bulk-checkbox.checked{background:var(--accent);border-color:var(--accent);}
+.bulk-checkbox.checked::after{content:"✓";color:#fff;font-size:12px;font-weight:800;line-height:1;}
+
+
+.coll-item{padding:11px 0;border-bottom:1px solid var(--border);}
+.coll-item:last-child{border-bottom:none;}
+.coll-item-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.coll-item-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:7px;}
+.coll-item-pct{font-size:13px;font-weight:800;}
+.coll-bar-bg{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;margin-bottom:7px;}
+.coll-bar-fill{height:100%;border-radius:4px;transition:width .6s cubic-bezier(.4,0,.2,1);}
+.coll-item-meta{display:flex;gap:14px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;}
+.coll-item-meta b{font-weight:700;}
+
+/* SEARCH RESULT */
+.search-card{background:var(--surface);border-radius:var(--radius);padding:16px;border:1px solid var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+.search-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px;}
+.search-row:last-child{border-bottom:none;}
+.search-key{color:var(--text-dim);}
+
+.preview-box{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;font-size:13px;color:var(--text-dim);}
+.empty-msg{color:var(--text-dim);text-align:center;padding:40px 0;}
+.add-col-row{display:flex;gap:8px;margin-top:6px;}
+.add-col-input{flex:1;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;color:var(--text);padding:9px 12px;font-size:14px;outline:none;}
+
+/* IMPORT MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(5,9,15,.7);z-index:200;display:none;align-items:flex-end;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal-sheet{background:var(--surface);border:1px solid var(--border);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px 18px 32px;max-height:85vh;overflow-y:auto;}
+.modal-handle{width:40px;height:4px;background:var(--border-strong);border-radius:2px;margin:0 auto 18px;}
+.modal-title{font-size:17px;font-weight:800;margin-bottom:4px;}
+.modal-sub{font-size:13px;color:var(--text-dim);margin-bottom:18px;}
+.import-drop{border:2px dashed var(--border-strong);border-radius:14px;padding:30px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface-2);margin-bottom:14px;}
+.import-drop:hover,.import-drop.dragover{border-color:var(--accent-2);background:var(--surface);}
+.import-drop-icon{font-size:36px;margin-bottom:8px;}
+.import-drop-text{font-size:14px;color:var(--text-dim);}
+.import-drop-text b{color:var(--accent-2);}
+.import-preview{background:var(--surface-2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;}
+.import-row-ok{color:var(--success);}
+.import-row-warn{color:var(--warning);}
+.import-row-err{color:var(--danger);}
+.import-stat{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);}
+.import-stat:last-child{border:none;}
+
+/* MONTH SWITCHER */
+.month-switcher{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.1);
+  border-radius:20px;padding:4px 10px 4px 6px;
+  cursor:pointer;transition:background .15s;
+  border:1px solid rgba(255,255,255,.18);
+  flex-shrink:0;
+}
+.month-switcher:hover{background:rgba(255,255,255,.18);}
+.month-switcher-arrow{font-size:16px;padding:0 2px;opacity:.85;line-height:1;cursor:pointer;transition:opacity .15s;}
+.month-switcher-arrow:hover{opacity:1;}
+.month-switcher-label{font-size:12px;font-weight:700;letter-spacing:.3px;white-space:nowrap;min-width:90px;text-align:center;}
+.month-dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex-shrink:0;transition:background .2s;}
+.month-dot.empty{background:var(--border-strong);}
+
+/* MONTH PICKER MODAL */
+.month-picker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0;}
+.month-picker-btn{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+  padding:10px 4px;font-size:13px;font-weight:700;color:var(--text-dim);
+  cursor:pointer;text-align:center;transition:all .15s;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+}
+.month-picker-btn:hover{border-color:var(--border-strong);color:var(--text);}
+.month-picker-btn.active{background:var(--accent-soft);border-color:var(--accent);color:var(--text);}
+.month-picker-btn.has-data .mp-dot{background:var(--success);}
+.mp-dot{width:6px;height:6px;border-radius:50%;background:var(--border-strong);}
+.year-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.year-nav-btn{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;}
+.year-nav-btn:hover{border-color:var(--border-strong);}
+.year-nav-label{font-size:18px;font-weight:800;}
+
+/* AREA RANKING GRID */
+.area-ranking-card{ padding:16px; }
+.area-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:10px;
+}
+.area-box{
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:12px 14px;
+  display:flex;flex-direction:column;gap:2px;
+  transition:border-color .15s;
+}
+.area-box:hover{ border-color:var(--border-strong); }
+.rank-1.area-box{ border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.06); }
+.rank-2.area-box{ border-color:rgba(148,163,184,.3);background:rgba(148,163,184,.05); }
+.rank-3.area-box{ border-color:rgba(180,83,9,.3);background:rgba(180,83,9,.05); }
+
+.area-box-header{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:2px;
+}
+.area-badge{
+  font-size:10px;font-weight:800;
+  width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.area-box-name{
+  font-weight:700;font-size:13px;
+  flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.area-box-pct{
+  font-size:13px;font-weight:800;
+  flex-shrink:0;
+}
+.area-box-stats{
+  display:flex;justify-content:space-between;gap:4px;
+  margin-top:4px;
+}
+.area-stat-item{display:flex;flex-direction:column;align-items:center;flex:1;}
+.area-stat-label{font-size:10px;color:var(--text-dim);font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
+.area-stat-value{font-size:13px;font-weight:800;margin-top:1px;}
+.area-box-pills{
+  display:flex;align-items:center;gap:6px;
+  margin-top:6px;font-size:11px;font-weight:700;
+  flex-wrap:wrap;
+}
+.area-pill-paid{color:var(--success);}
+.area-pill-partial{color:var(--warning);}
+.area-pill-unpaid{color:var(--danger);}
+
+/* keep old .area-row styles in case reused elsewhere */
+.area-row{margin-bottom:14px;}
+.area-row:last-child{margin-bottom:0;}
+.area-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.area-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
+.area-meta{font-size:12px;color:var(--text-dim);}
+.area-bar-bg{height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden;}
+.area-bar-fill{height:100%;border-radius:4px;transition:width .5s ease;}
+.area-amounts{display:flex;gap:10px;font-size:12px;color:var(--text-dim);margin-top:4px;flex-wrap:wrap;}
+.area-amounts b{font-weight:700;}
+
+/* ── RESPONSIVE / DESKTOP ─────────────────────────────────────── */
+
+/* TABLET (700px+) */
+@media (min-width:700px){
+  body{max-width:860px;border-left:1px solid var(--surface-2);border-right:1px solid var(--surface-2);}
+  .tabnav{max-width:860px;border-radius:18px 18px 0 0;}
+  .page{padding:20px 24px 0;}
+  .header{padding:22px 28px 18px;}
+  .kpi-row{gap:14px;}
+  .kpi{padding:16px 18px;}
+  #userList{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start;}
+  #userList .user-card{margin-bottom:0 !important;}
+  #page-2.active{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;}
+  #page-2 > #formTitle,#page-2 > .preview-box,#page-2 > .btn{grid-column:1 / -1;}
+  .modal-overlay{align-items:center;}
+  .modal-sheet{border-radius:20px;max-width:520px;}
+}
+
+/* ── DESKTOP (960px+): full admin dashboard ─────────────────── */
+@media (min-width:960px){
+
+  /* ── Root layout: fixed sidebar + scrollable content ── */
+  html{background:#070c14;}
+  body{
+    display:block;
+    max-width:none;min-height:100vh;
+    padding-bottom:0;margin:0;border:none;
+    background:transparent;
+  }
+
+  /* Sidebar fixed on the left, starts below the header */
+  .tabnav{
+    position:fixed;top:64px;left:0;
+    width:220px;height:calc(100vh - 64px);
+    transform:none;
+    background:linear-gradient(180deg,#0d0f18 0%,#0b0d14 100%);
+    border-right:1px solid var(--border);
+    border-top:none;border-radius:0;
+    box-shadow:4px 0 24px rgba(0,0,0,.35);
+    display:flex;flex-direction:column;align-items:stretch;
+    padding:12px 0 20px;gap:2px;z-index:80;
+    overflow:hidden;
+  }
+
+  /* Sidebar brand header removed (merged into top header) */
+  .tabnav::before{display:none;}
+  .tabnav::after{display:none;}
+
+  /* Sidebar nav items */
+  .tabBtn{
+    flex-direction:row;justify-content:flex-start;align-items:center;
+    gap:12px;padding:11px 18px;font-size:13.5px;
+    text-transform:none;letter-spacing:0;border-radius:0;
+    color:var(--text-dim);font-weight:500;
+    border-left:3px solid transparent;
+    transition:all .18s ease;
+  }
+  .tabBtn-icon{
+    width:32px;height:32px;font-size:17px;border-radius:8px;
+    background:rgba(255,255,255,.04);
+    transform:none !important;box-shadow:none !important;
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    transition:background .18s ease;
+  }
+  .tabBtn span:last-child{margin-top:0;}
+  .tabBtn.active{
+    color:#fff;font-weight:700;
+    background:rgba(30,58,138,.12);
+    border-left-color:var(--accent-2);
+  }
+  .tabBtn.active .tabBtn-icon{
+    background:linear-gradient(135deg,rgba(30,58,138,.3),rgba(6,182,212,.2));
+    box-shadow:none !important;
+  }
+  .tabBtn:not(.active):hover{
+    background:rgba(255,255,255,.04);
+    color:var(--text);
+    border-left-color:rgba(30,58,138,.3);
+  }
+  .tabBtn:not(.active):hover .tabBtn-icon{background:rgba(255,255,255,.07);}
+
+  /* Add User → prominent CTA in sidebar */
+  .tabBtn-add{
+    order:-1;
+    margin:0 14px 6px;
+    border-radius:10px !important;
+    border-left:none !important;
+    background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    color:#fff;font-weight:800;
+    box-shadow:0 4px 18px rgba(30,58,138,.38);
+    padding:11px 16px;
+  }
+  .tabBtn-add .tabBtn-icon{background:rgba(255,255,255,.18) !important;}
+  .tabBtn-add:hover{filter:brightness(1.1);}
+  .tabBtn-add.active{
+    background:linear-gradient(90deg,#1e3a8a,#06b6d4);
+    box-shadow:0 4px 12px rgba(30,58,138,.25);
+  }
+
+  /* Sidebar version tag at the bottom */
+  .tabnav-footer{
+    margin-top:auto;padding:14px 18px 0;
+    font-size:11px;color:var(--text-dim);
+    border-top:1px solid var(--border);
+    display:block;
+  }
+  /* ── Main content area ── */
+  .header{
+    position:fixed;top:0;left:0;right:0;
+    z-index:90;border-radius:0;
+    padding:0 36px;height:64px;
+    display:flex;align-items:center;justify-content:space-between;
+    box-shadow:0 1px 0 rgba(6,182,212,.2),0 4px 24px rgba(0,0,0,.45);
+  }
+  .header-inner-left{display:flex;flex-direction:column;justify-content:center;}
+  .header-sub{font-size:24px;font-weight:900;letter-spacing:.5px;opacity:1;text-transform:none;margin-bottom:0;color:#fff;text-shadow:0 0 20px rgba(6,182,212,.4);display:flex;align-items:center;gap:12px;}
+  .wifi-logo{width:30px;height:30px;filter:drop-shadow(0 0 8px rgba(6,182,212,.8));}
+  .header-title{font-size:17px;font-weight:800;letter-spacing:-.2px;}
+  #syncStatus{font-size:11px;margin-top:0;opacity:.85;}
+
+  /* Content wrapper: offset for sidebar + topbar */
+  .page{
+    position:absolute;top:64px;left:220px;right:0;
+    padding:30px 36px 56px;
+    max-width:none;margin:0;
+    min-height:calc(100vh - 68px);
+    background:var(--bg);
+  }
+
+  /* Dashboard KPIs: 4-up row on wide screens */
+  #page-0 .kpi-row{display:flex;gap:14px;flex-wrap:nowrap;}
+  #page-0 .kpi-row .kpi{flex:1;}
+
+  /* Dashboard two-column layout */
+  #page-0.active{
+    display:grid;
+    grid-template-columns:1fr 320px;
+    grid-template-rows:auto;
+    gap:20px;
+    align-items:start;
+  }
+  /* Promise card spans full width */
+  #promiseAlertCard{ grid-column:1 / -1; }
+  /* KPI rows span full width */
+  #page-0 .kpi-row{ grid-column:1 / -1; }
+  /* Payment Breakdown - left column */
+  #page-0 .card:nth-of-type(1){ grid-column:1; }
+  /* Collector Performance - right column */
+  #page-0 .card:nth-of-type(2){ grid-column:2; grid-row:span 2; }
+  /* WhatsApp card - left column */
+  #page-0 .card:nth-of-type(3){ grid-column:1; }
+  /* Area ranking spans full width */
+  #page-0 .area-ranking-card{ grid-column:1 / -1; }
+
+  /* Users page */
+  #page-1.active{display:flex;flex-direction:column;gap:16px;}
+  #userList{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+    gap:14px;align-items:start;
+  }
+  #userList .user-card{margin-bottom:0 !important;}
+
+  /* Add/Edit form: 2-col */
+  #page-2.active{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px 24px;
+    max-width:760px;
+  }
+  #page-2 > #formTitle,
+  #page-2 > .preview-box,
+  #page-2 > #fSubmitBtn,
+  #page-2 > #fCancelBtn{ grid-column:1 / -1; }
+
+  /* Search page */
+  #page-3.active{display:flex;flex-direction:column;gap:16px;max-width:600px;}
+
+  /* Settings page */
+  #page-4.active{display:grid;grid-template-columns:1fr 1fr;gap:16px 24px;max-width:820px;align-items:start;}
+  #page-4 > div:first-child,
+  #page-4 > .btn,
+  #page-4 > .card:last-child{ grid-column:1 / -1; }
+
+  /* Modal as centred dialog */
+  .modal-overlay{align-items:center;justify-content:center;}
+  .modal-sheet{border-radius:16px;max-width:540px;max-height:80vh;}
+  .modal-handle{display:none;}
+
+  /* Toast offset for sidebar */
+  .toast{left:calc(220px + (100vw - 220px)/2);}
+}
+
+/* ── WIDE DESKTOP (1400px+) ── */
+@media (min-width:1400px){
+  .tabnav{width:240px;}
+  .page{left:240px;padding:32px 48px 64px;}
+  .toast{left:calc(240px + (100vw - 240px)/2);}
+  #userList{grid-template-columns:repeat(auto-fill,minmax(340px,1fr));}
+  #page-2.active{max-width:860px;}
+  #page-4.active{max-width:960px;}
+  #page-0.active{grid-template-columns:1fr 360px;}
+  .area-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));}
+}
+
+/* LOGIN SCREEN */
+#loginScreen{
+  display:none;
+  position:fixed;inset:0;z-index:9999;
+  align-items:center;justify-content:center;
+  padding:24px;
+  background:var(--bg) radial-gradient(ellipse 900px 500px at 50% -10%,rgba(30,58,138,.08),transparent 60%);
+}
+.login-card{
+  width:100%;max-width:360px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:28px 24px;
+  box-shadow:var(--shadow-card);
+}
+.login-logo{font-size:34px;text-align:center;margin-bottom:8px;}
+.login-title{font-size:18px;font-weight:800;text-align:center;margin-bottom:4px;}
+.login-sub{font-size:12px;color:var(--text-dim);text-align:center;margin-bottom:20px;}
+.login-error{font-size:12px;color:var(--danger);text-align:center;margin-top:12px;display:none;}
+/* While locked, show only the login screen */
+body.locked #loginScreen{display:flex;}
+body.locked > *:not(#loginScreen):not(script){display:none !important;}
+
+</style>
+</head>
+<body class="locked">
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">🔒</div>
+    <div class="login-title">Sign In</div>
+    <div class="login-sub">Enter your credentials to access this app.</div>
+    <div class="field">
+      <label>👤 Username</label>
+      <input id="loginUser" type="text" autocomplete="username" placeholder="Username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()"/>
+    </div>
+    <div class="field" style="margin-top:10px;">
+      <label>🔑 Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="Password" onkeydown="if(event.key==='Enter')attemptLogin()"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="attemptLogin()">Sign In</button>
+    <div class="login-error" id="loginError">❌ Incorrect username or password</div>
+  </div>
+</div>
+
+<div class="header">
+  <div class="header-inner-left">
+    <div class="header-sub" id="hCompany"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAQu0lEQVR4nO2de5BnRXXHvz0zCyy7LG/ZXZTd5WkiKIIRy5BsxGiiUUmCRkoxiqaMFWPIxoB5k1QCiWB8JOWjyoAJpopSwRQlAUwZgyIoES1FkEdkV92ouzwXAss+ZuaTP7rPdP967p3fvb/5zczv99v+Vt3a387t2/f0Oae7T59zuq9UUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFAwxHBLTcBiAbC2dmszkuScY2EpGgyMnAIEQY8ptg1J020FWlMPkhgl5Rh6BQDG5AUl59zkHOWWSVoZruWS9pc0Ic+DvZL2SHpa0lOSnnTO7Z6jrvHw3LSGXCGGTgHSnlklcGCNpBMk/ZSkkyRtkHS0pCMkHSzpQHnh521HUQkel/SIpB9L2izpe5LukXS/pK25wIEJ9TjSLDWGRgGsp+dCB06Q9GJJZ0p6gaTjJB3Upmo158PT8grxTUm3SPqqpLtToQdlmHbOTbegYckw0AqQ9HaMoWH4faGkV0l6uaTnSVqWPTodLim20amzvVUjQP6b5PfMVJOVu1vSFyRdL+lW59yujPaBHhUGUgGMec65qeRvPy3pNyT9uqRTskem5IVhRttCtcsUwpRrIrv/gKTrJF3tnLtj5iE/KkwNsiIMDEIPn/kNvAa4HthDxDSwF5gKv5cK04EGoyXFzcB5wPKsPQPZ6ZYcdAp+P+B84JsZU6sYPUgwZUhxH7AJOKSqrfs8AGcMCb9/E/hOxtRJlran94LJcBm+D1xAGBGAMbxhu++Czl7/i8BtGQMHubc3hSmw4W7gdUm7cztiUbEk8xGJkQeslXSppDeH21OBrn70DjPYUuOrziVM9q+VSa/50jKlaDh+TtJFzrl7CSPBUiwdF10BgHGz7oE3SnqfpNWKlnWvgk8tdCep3/OsrTRyF3FbmEKOS3pS0l845z4gdfJmsbCoCgBMOOcmgUMl/YOk88KtSc1eUjWqUpGhVc//RNIPJW2R9ANJP5L0sKQd8k6dvaHchKQDJB0i6XBJayUdI+9FXB/+nyumCapXZZhSVNKbJL3DOfcD41EP9fWERVOARPhnSLpK0onyTOiFgeboSYU+KekuSbfJe+i+LWmLc+7JedK9XNI6ed/DGZJ+Vt75tDwp1uu0lU4L2yX9lnPuerxtNNAOpMag08o/H9gVjKF8udQEuWG4E7gJ+B3gpLneD0wk13jNNZFdlQIF1gNvBj4L7Ejomaa3FUtqJP5xQvdw+wxCI8bC70uSRra17nOmfhu4EDi24p0zwusHA60NRAVx2f21wDvoXMHkQm2CqYQvVxJWBwzrUjEwzq5P1AiyDVPA9/ZX0bl8HKOmtzJbeGnvH0voG6soV6tEyTvHs79vBD5FFP407RTBPJzW1pX2voWQ0YIhYewEfpiETlduG0YA3AhszN4xS+h0Dvd9YxqJwJk9Alg7XfK304CrE/rbKr7x6jbgMKOhX+1J0fc5JjDCDKJrJJ0tb23nEbs6pNbxt+SXSZ8LdZvBOGMgEaNuypdQ+B60Xj5EfKy8ZX+UpMMUk0KcpN2Sdkl6VNKDkrbKh30fkPR959yOrF6jbzoLBY+ndAA/J+mvJZnypm3rBlsZfUPSy5xzjwFjAx1mptPguybT5iawXr8T+BNgv1DXGLOH2zEyLxpwEHAW8FfAfwA/avHuOmwHvgT8HfBK4PDsnePMHok66AXeDjwU6mszGhg/bgNWkNhUAwmi4fLxQHhT4adz5a3Ac5M6qwSfMncF8KvAVcD/1tQ/GZhp12TNlZepwoPAtcAbCMNzFV1GO2FqANYB1yXtbWoIpzaB2S+DtzogCv/iQHBT4aeMuDypJ59Xc8GfBPwtsKWiPhPgNPMPIplyVkUifwJ8GDgtozMfESaS3+8mKldTA9F4eWVe30CAKLTXB0L30ozxxoAngXNDHR3DXPh/ysDT8L396aSexYwYmkKkwpvC9+6NCZ0dPZVEgYGXAD8Ozzb1h5gSvCfl+ZKDuM4/GXiK5kkaxsCtwM+EOmb1+uT3scAVGeOXOj8gX62AX/WcmtCdTwvWWTYA3wrPNFGC9F0vr6p70UFcQy8H7grENRnWrCH3ABtCXblBl04Ff0Snx20Q8wNSmnbjp7NVXdp2KD5zCJopgXWu7cAaltooJA5pH2vRCFOQO4HVKUPC73Ql8QLg9uTZXtzHi420A9xH7K351GZtXA58IZRvw7+bwvNLowBJA87qgfj78Pn7eVJIyqAL6Iwb9MOYM1sht/hTy78feYb51HApcTUwq714JfhyKNuEj1bm/PD84tsDRAX4bEWDq2Bz9TaCDz9jRtojrkqea+tTN8xlvTd93hSjVzsjdWV/HjgyFxhRCQ4hpsJ1a7NNN99gnkGjnh4EnHOOQPx35XfgTKs+HGpx+0lJv+Cc+xpJ3JuQCIGfEq6V3+gxKe81a0NjmhCS07JTPj9gm6SH5HMCdoV7+8nvGjpC0hr5BJVV2fMWgm5LkxQ9ofdL+jXn3Hdr2r9B0u2BDktzr2unC2043jn3iMmkJV09JWH0Aot5v20O4R8r6QZ5ZWrjOpY68wNsVNkm6WuSviLpDvntXQ865/ZW1hAQlPpIedfx8+V3HL1YPifABNI2/r9MXqFPlHQz8Grn3O3Gh9D+CefcFuD18htNTJEHz+kjdQzZ1zL3FGB//2gov6yijuPwWbNp+SbIo22P4qePV5OkYWd0V0X9LNBTF/9fAbwU+Ahx/Q7tE1eN1h3Ai0Ld6XRgq4OLQrk6Z5q9d95TQM+g2ghMhTGNXw6BXyIeQKdr1Oa+tcADSR1tmQmwGXgPcHROI4lwmzCKGMmceTa7fxjw2/hVjKEXuh8luLyhIy3elODzodxuOo3SKSJf3xrKLo1TiOpkjxwPAadk5c1/sBKvxW2YmPrRt+Ndq6sSmvruLycqRGq0LgPeRlTeNv791An2zIw3lpuwGr9aqsMnWWo/QEb4W/BWrAlyB/AZ4MSsXKrl/xbKNhV+2uuvJOnxVGTrLFB7c9f0wcBlROE3XbVYuf+mfnR8BvBPxEjiNPA94N0JLUtvI9CpvSfh/fWr8/vhtwn/z0OjmgaNTEm2A+ek9bVhAnRkKllvm/lby3anirCR2GObKrSVu6KivtQlfjjwfOA5wP5taFw0UOGXNgbnZYCfJxqOTZwuaVx8faijq+CZnRDadbik00jsOpXQOaIdRvtRzcq9Keej0V/xzsHcW0jWq2rurSTOm03mTGPQp4EDQl21Rg9z5AgmdByEH16fGa6jgFV1jO1WZyiTCu5DLZTAbIcdwLOomNfn4ut80VfrMTgi6pwRthXsb+TX2E02g1iZTzjn3mqMqDkaJk3HssMkDpV0svx6/hT51LC18htAliv6GiblnUKPA9vk08Hukj8J5E7n3ENJnbPS0uy9ds85dwHwhKQ/a9BOO2voYEkfds69JleALnwdfBCH/tOIvvhuQ7/1nqvDs5W7afNeCxyDX6Zdh7cX5otH8ellmwgGbfruvEfSOSVclrVlLphReHZVu4YaREPri1ljuzHjZmJ6dlXeXWoo/RJ+mngiqyv16afBnqrLgkV1MYBdwA3Aa6lwaCX/T5XgX8OzTWIl08D9+HjIYFj48wWx95+ZNLQJI7YSgyd5hlA6355D9aaMfuUMpEGlFHfidzqZoPMMIDNA9wfuSNo2F0zxzSAcjKyf+SBh0MV0jxqmW6s2hufqwsUvIo4oxtyFThSpSge7A3hlQldVhPME4P8a0Geron9JebeQWEwv0sENyli07e+dc1/CB0gsx37COTeNd5pcLulWSS+RD8xYJLKXSF0b2Lbz8fDOKUmnS/p34J+BIyywI80YhhPOuf+RdGHy3Fz1O8VI5PAafgbiCPDORMurYLHzB/BzYOoZszqeS3Qdt912tVBIY/6bgbNSmsNvGwluCeXq6LYR4P15HUMLopfwGLwRVRVBSwNH54TyxjQT/uvww6gxatBgNE0B77I2MDvFDbz3s4oHVscLUx4MPRIGbMoYZpfNi5+y8nRa0r+fPNePDKF8g0j+t17tiHQ0uCxri/HgvUn59L2GD6Y8GxkkDPg94JGMcXvwsfb9iEtGE/6fhjK9CKbuDL8mSM8i7OU5gI9Y2+lUgr8kjmaGp4BLwv2+e/zqsNhHxIwFQ261pLMkPUt+Q+ZXnHP3hDJO0ng4TWSTpPerfXpYeg6P4WFJ94Zri/wm0KdCuQPls4COkfRs+YOm13Sprxssq+mDzrlNxBNSLJ1unbwRe1Sg5eaQEdRTatfQgDn87el92u8ygtnnCWwGPgC8jGQfXwMaV+H9FpcQ9ztU1d8NFum8KNQ74zNow5uRA3FPfUeULhH+qfitX21StFPb4KvAucCBXd5bdc3a14ffFXxjzbvmQjod/ErWRgswNY5UjjSIEa8VwL0tGJ0uBzcDb8jqbRTWraBlnNk7el5BPL62qXJauYfxkcelz+IZRCQ946OBcU1DqSaEK/DRv1SA/TojaCZhFO/avTQTcDcMxm6eQQWz4wVNen6agvX2pK4Fc57Q6eY9G3i8hRKYQr9xoekcOiQK8JmMWXWwnr+TOLcuek4gcDp+p1MTJbBl7Ncp00AE0d07jg+FdmNm6tD55fBsm00kM+8lpn+1XnfbO4HnAY/ROR3V0Q1+1LAo5/CHe+eLHhQg3xjZWPhUnOjV5n5FeVOCl9I9GlkUoA7EKeDTmZDrhG8etjbCz5M21uKH8DPxmUpr5io/R72mBBd2od1iIGUKyJEowBmBWXlvmiY6VSxjppGVT5JZAxyNP33sdma7Yh/H+w8uBI4K5btODXTaBP8V6kp389iUZfS/Nm1zQUCiBL9b04PAnyXUOFKWCg/4A/xaPIWlgeXD9nbgnVX11LzH4hfr8JlMdbjcyvfKp5FGogSvwB+YsDMwbif+FI3Tw/0m+f1m5O1PXF1A/cem0g9AGT6J3wLWZCQwP8EG/IZZy03cg3cendeU9n0adKZ9rcfP0+ur7s9Rx4zzhng2354KodchnXJmQtQtaT8ab1sc34b2AsXwafa3xoYTcSS5OAhxN73BnvvDtN4u726Uvj4oGOhlSMrIpmfkhmeQ/37wXYpf/OylrXbiyB75EPEPPSndacmUYGA/MD3QQ5JzbtquFo+NBWZvko/Ht/k28CwSwvPLJb0r1NuIZyntgyr8kQNxubeCeJLHfA+SNINxC2FnLiPkwBnoEaAHWHtOls/oadxjG9S5Tv78ImnAp842GDUFMMGY5d2vT7DZgU3HZe8ZeoyaAhjyI97mC5vDbXNLUYABx+4+12cC3zVnqSHEqCmA9dSt4d9+tc/qsXpHxqofNQWw5eJ35FO+zScwH9gy8jH5U1HT9ww9RkoB7Pha59w2SbcoOnLmA/tm8BfDh5vGR2ldP1IKEGDz9YcUHTn9qPMf+1BPwWKAGJm7IThzet1MagGha0J9A+nPL8hAjM+vJX46rq0SmPC3AEdSE+QpGFAQR4FT6fxAU9OEU/AHWD87ra9giEAMC28A/jMTdrfvBN5IPMe3DP3DCjqTNN6EP1CqbhSYxJ/icW7V86OIkXFpzoUgxJmYPHCy/Nk+x0taKekJ+e8Efz3bpq5RWvLt82gylFNzPu+oYp8YAXKEEaFqaG+bfFJQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFCwlPh/Bin+4nc7sM8AAAAASUVORK5CYII=" alt="" class="wifi-logo"> <span class="company-name">My Company</span></div>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+    <div id="syncStatus" style="font-size:11px;opacity:.85;"></div>
+    <div class="month-switcher" onclick="openMonthPicker()">
+      <div class="month-dot" id="monthDot"></div>
+      <span class="month-switcher-label" id="monthSwitcherLabel">July 2026</span>
+      <span style="font-size:10px;opacity:.75;">▾</span>
+    </div>
+  </div>
+</div>
+
+<!-- MONTH PICKER MODAL -->
+<div class="modal-overlay" id="monthPickerModal" onclick="closeMonthPickerModal(event)">
+  <div class="modal-sheet" style="max-height:85vh;">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📅 Switch Billing Month</div>
+    <div class="modal-sub">Each month keeps its own independent data. Switch freely — nothing is lost.</div>
+    <div class="year-nav">
+      <button class="year-nav-btn" onclick="shiftPickerYear(-1)">‹</button>
+      <span class="year-nav-label" id="pickerYear"></span>
+      <button class="year-nav-btn" onclick="shiftPickerYear(1)">›</button>
+    </div>
+    <div class="month-picker-grid" id="monthPickerGrid"></div>
+    <div id="monthPickerInfo" style="font-size:12px;color:var(--text-dim);margin-bottom:12px;padding:8px 12px;background:var(--surface-2);border-radius:8px;display:none;"></div>
+    <div style="display:flex;gap:8px;margin-top:4px;" id="monthPickerActions">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closeMonthPickerDirect()">Cancel</button>
+      <button class="btn btn-primary" style="flex:2;" id="monthPickerConfirm" onclick="confirmMonthSwitch()">Switch Month</button>
+    </div>
+    <div id="monthCopySection" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">📋 Copy users from another month</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Copy all users from a past month into this one (paid amounts reset to 0). Existing users are kept.</div>
+      <div class="field" style="margin-bottom:10px;">
+        <label>Source month</label>
+        <select id="copyFromMonthSel" style="background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;outline:none;"></select>
+      </div>
+      <button class="btn btn-secondary" onclick="copyUsersFromMonth()">📋 Copy Users (reset paid to 0)</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- DASHBOARD -->
+<div class="page active" id="page-0">
+  <!-- PROMISE ALERT (shown only when promises exist) -->
+  <div id="promiseAlertCard" style="display:none;"></div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">Total Users</div><div class="kpi-value" id="kTotal" style="color:var(--text)"></div></div>
+    <div class="kpi"><div class="kpi-label">Billed ৳</div><div class="kpi-value" id="kBilled" style="color:var(--accent-2)"></div></div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">Collected ৳</div><div class="kpi-value" id="kCollected" style="color:var(--success)"></div></div>
+    <div class="kpi"><div class="kpi-label">Outstanding ৳</div><div class="kpi-value" id="kOutstanding" style="color:var(--danger)"></div></div>
+  </div>
+  <div class="card">
+    <div class="section-label" style="margin-bottom:10px;">Payment Breakdown</div>
+    <div class="card-row clickable" onclick="goToUsers('PAID')"><span>✅ PAID</span><span id="dPaid" style="font-weight:800;color:var(--success);font-size:16px;"></span></div>
+    <div class="card-row clickable" onclick="goToUsers('PARTIAL')"><span>⚠️ PARTIAL</span><span id="dPartial" style="font-weight:800;color:var(--warning);font-size:16px;"></span></div>
+    <div class="card-row clickable" onclick="goToUsers('UNPAID')"><span>⛔ UNPAID</span><span id="dUnpaid" style="font-weight:800;color:var(--danger);font-size:16px;"></span></div>
+  </div>
+  <div class="card">
+    <div class="section-label" style="margin-bottom:10px;">👷 Collector Performance</div>
+    <div id="collectorStats"></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="section-label" style="margin-bottom:0;">📲 WhatsApp Due List</div>
+      <button class="btn btn-secondary btn-small" onclick="openWhatsAppModal()" style="display:flex;align-items:center;gap:5px;background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;border:none;">
+        <span style="font-size:15px;">💬</span> Generate
+      </button>
+    </div>
+    <div style="font-size:12px;color:var(--text-dim);">Generate a formatted due list per collector, ready to send on WhatsApp.</div>
+  </div>
+  <div class="card area-ranking-card">
+    <div class="section-label" style="margin-bottom:12px;">📍 Area Collection Ranking</div>
+    <div id="areaStats" class="area-grid"></div>
+  </div>
+</div>
+
+<!-- USERS -->
+<div class="page" id="page-1">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <div style="font-weight:700;font-size:16px;">👥 All Users</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary btn-small" id="bulkModeBtn" onclick="toggleBulkMode()" style="display:flex;align-items:center;gap:5px;padding:8px 14px;">☑️ Bulk Pay</button>
+      <button class="btn btn-primary btn-small" onclick="openImportModal()" style="display:flex;align-items:center;gap:5px;padding:8px 14px;">📥 Import</button>
+    </div>
+  </div>
+  <!-- Bulk selection bar (hidden by default) -->
+  <div id="bulkBar" style="display:none;background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;display:none;flex-direction:column;gap:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span id="bulkCount" style="font-weight:700;font-size:14px;color:var(--accent-2);">0 selected</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary btn-small" onclick="bulkSelectAll()">Select All</button>
+        <button class="btn btn-secondary btn-small" onclick="bulkDeselectAll()">Clear</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="bulkPayBtn" onclick="openBulkPayModal()" style="opacity:.4;pointer-events:none;">💰 Mark as Paid</button>
+  </div>
+  <div class="field"><input id="userSearchInput" placeholder="🔍 Search by name, ID, area or collector" oninput="debouncedRenderUsers()"/></div>
+  <div class="filter-chips" id="userFilterChips"></div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-secondary btn-small" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;" onclick="openExportModal()">📤 Export</button>
+  </div>
+  <div id="userList"></div>
+  <div id="userPagination" class="pagination-bar"></div>
+</div>
+
+<!-- ADD/EDIT -->
+<div class="page" id="page-2">
+  <div id="formTitle" style="font-weight:700;font-size:16px;"></div>
+  <div class="field"><label>🪪 User ID (optional – auto-assigned if blank)</label><input id="fUserId" type="number" placeholder="e.g. 101"/></div>
+  <div class="field"><label>Full Name *</label><input id="fName" placeholder="e.g. Md. Alam"/></div>
+  <div class="field"><label>Area / Zone</label><input id="fArea" placeholder="e.g. Area-A"/></div>
+  <div class="field"><label>Collector</label><select id="fCollector"></select></div>
+  <div class="field"><label>📶 Package</label><select id="fPkg"></select></div>
+  <div class="preview-box">Monthly Bill: <b id="fBillPreview" style="color:var(--accent-2);font-size:18px;"></b> <span id="fBillHint" style="font-size:12px;color:var(--warning);display:block;margin-top:4px;"></span></div>
+  <div class="field"><label>💲 Custom Bill Override (৳) <span style="font-weight:400;color:var(--text-dim);">— leave blank to use package default</span></label><input id="fCustomBill" type="number" placeholder="e.g. 550 (optional)"/></div>
+  <div class="field"><label>Amount Paid (৳)</label><input id="fPaid" type="number" placeholder="0"/></div>
+  <div class="field"><label>Payment Date</label><input id="fDate" type="date"/></div>
+  <button class="btn btn-primary" id="fSubmitBtn" onclick="handleFormSubmit()"></button>
+  <button class="btn btn-secondary" id="fCancelBtn" style="display:none;" onclick="cancelEdit()">Cancel</button>
+</div>
+
+<!-- SEARCH -->
+<div class="page" id="page-3">
+  <div style="font-weight:700;font-size:16px;">🔍 Search by User ID</div>
+  <div class="field"><label>Enter User ID</label><input id="searchInput" type="number" placeholder="e.g. 3" oninput="doSearch()"/></div>
+  <div class="dev-credit-box">Website designed &amp; developed by <b>Rakibul Islam Limon</b><br>WhatsApp: <a href="https://wa.me/8801343286499" target="_blank">+880 1343-286499</a></div>
+  <div id="searchResult"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="page" id="page-4">
+  <div style="font-weight:700;font-size:16px;">⚙️ Settings</div>
+  <div class="card" style="gap:14px;display:flex;flex-direction:column;">
+    <div class="section-label">Header Info</div>
+    <div class="field"><label>🏢 Company Name</label><input id="sCompany" placeholder="e.g. DhakaNet Services"/></div>
+    <div class="field"><label>📅 Month</label><select id="sMonth"></select></div>
+    <div class="field"><label>📅 Year</label><select id="sYear"></select></div>
+  </div>
+  <div class="card" style="display:flex;flex-direction:column;gap:4px;">
+    <div class="section-label" style="margin-bottom:8px;">👷 Collectors</div>
+    <div id="collectorList"></div>
+    <div class="add-col-row">
+      <input class="add-col-input" id="newColInput" placeholder="New collector name" onkeydown="if(event.key==='Enter')addCollector()"/>
+      <button class="btn btn-primary btn-small" onclick="addCollector()">+ Add</button>
+    </div>
+  </div>
+  <div class="card" style="display:flex;flex-direction:column;gap:4px;">
+    <div class="section-label" style="margin-bottom:8px;">💰 Package Monthly Bills</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Edit the monthly bill amount for each package. Changes apply to all users on that package.</div>
+    <div id="packageBillList"></div>
+  </div>
+  <div class="preview-box" id="settingsPreview"></div>
+  <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+  <div class="card">
+    <div class="section-label" style="margin-bottom:10px;">🔒 Account</div>
+    <button class="btn btn-secondary" onclick="logout()">🚪 Log Out</button>
+  </div>
+  <div class="card">
+    <div class="section-label" style="margin-bottom:10px;">⚠️ Danger Zone</div>
+    <button class="btn btn-danger" onclick="resetData()">🗑️ Reset All User Data</button>
+  </div>
+</div>
+
+<!-- WHATSAPP MODAL -->
+<div class="modal-overlay" id="whatsappModal" onclick="closeWhatsAppModal(event)">
+  <div class="modal-sheet" style="max-height:90vh;">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+      <span style="font-size:22px;">💬</span>
+      <div class="modal-title" style="margin-bottom:0;">WhatsApp Due List</div>
+    </div>
+    <div class="modal-sub">Generate a formatted due list, ready to send on WhatsApp.</div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+      <div class="field">
+        <label>👷 Collector</label>
+        <select id="waCollector" onchange="renderWAPreview()"></select>
+      </div>
+
+      <div class="field">
+        <label>📍 Area</label>
+        <select id="waArea" onchange="renderWAPreview()"></select>
+      </div>
+
+      <div class="field">
+        <label>📋 Include statuses</label>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;">
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" id="waIncUnpaid" checked onchange="renderWAPreview()" style="accent-color:var(--danger);width:16px;height:16px;"> <span style="color:var(--danger);">⛔ Unpaid</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" id="waIncPartial" checked onchange="renderWAPreview()" style="accent-color:var(--warning);width:16px;height:16px;"> <span style="color:var(--warning);">⚠️ Partial</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" id="waIncPaid" onchange="renderWAPreview()" style="accent-color:var(--success);width:16px;height:16px;"> <span style="color:var(--success);">✅ Paid</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <div style="font-size:11px;color:var(--text-dim);font-weight:600;text-transform:uppercase;letter-spacing:1px;">Preview</div>
+      <div id="waCharCount" style="font-size:11px;color:var(--text-dim);"></div>
+    </div>
+    <div id="waPreview" style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.75;white-space:pre-wrap;font-family:'JetBrains Mono',monospace;max-height:220px;overflow-y:auto;color:var(--text);margin-bottom:14px;word-break:break-word;"></div>
+
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closeWhatsAppModalDirect()">Close</button>
+      <button class="btn btn-secondary" style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;" onclick="copyWAText()" id="waCopyBtn">📋 Copy</button>
+      <button class="btn btn-primary" style="flex:2;background:linear-gradient(135deg,#25D366,#128C7E);display:flex;align-items:center;justify-content:center;gap:6px;border:none;" onclick="openWhatsApp()" id="waOpenBtn">
+        <span style="font-size:16px;">💬</span> Open WhatsApp
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK PAY MODAL -->
+<div class="modal-overlay" id="bulkPayModal" onclick="closeBulkPayModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💰 Bulk Payment Update</div>
+    <div class="modal-sub" id="bulkPaySub">Updating payment for selected users.</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">
+      <div class="field">
+        <label>💲 Payment Amount</label>
+        <select id="bulkAmountType" onchange="onBulkAmountTypeChange()">
+          <option value="full">Full bill amount per user</option>
+          <option value="custom">Custom fixed amount for all</option>
+        </select>
+      </div>
+      <div class="field" id="bulkCustomAmountField" style="display:none;">
+        <label>Amount (৳)</label>
+        <input id="bulkCustomAmount" type="number" placeholder="e.g. 500"/>
+      </div>
+      <div class="field">
+        <label>📅 Payment Date</label>
+        <input id="bulkPayDate" type="date"/>
+      </div>
+      <div class="field">
+        <label>👷 Collected By</label>
+        <select id="bulkCollector">
+          <option value="">— Keep existing collector —</option>
+        </select>
+      </div>
+    </div>
+    <div id="bulkPayPreview" style="font-size:13px;color:var(--text-dim);margin-bottom:14px;padding:10px 14px;background:var(--surface-2);border-radius:8px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closeBulkPayModalDirect()">Cancel</button>
+      <button class="btn btn-primary" style="flex:2;" onclick="confirmBulkPay()">✅ Confirm Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-overlay" id="exportModal" onclick="closeExportModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📤 Export Users</div>
+    <div class="modal-sub">Filter by collector and/or area before exporting.</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;">
+      <div class="field">
+        <label>👷 Collector</label>
+        <select id="exportCollector">
+          <option value="">All Collectors</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>📍 Area</label>
+        <select id="exportArea">
+          <option value="">All Areas</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>📊 Status</label>
+        <select id="exportStatus">
+          <option value="">All Statuses</option>
+          <option value="PAID">✅ Paid only</option>
+          <option value="PARTIAL">⚠️ Partial only</option>
+          <option value="UNPAID">⛔ Unpaid only</option>
+        </select>
+      </div>
+    </div>
+    <div id="exportPreviewCount" style="font-size:13px;color:var(--text-dim);margin-bottom:14px;padding:10px 14px;background:var(--surface-2);border-radius:8px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closeExportModalDirect()">Cancel</button>
+      <button class="btn btn-primary" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;" onclick="exportUsersExcel()">📊 Excel</button>
+      <button class="btn btn-primary" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;" onclick="exportUsersPDF()">📄 PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="importModal" onclick="closeImportModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📥 Import Users from Excel</div>
+    <div class="modal-sub">Upload your .xlsx file — users are added automatically. Duplicate names are skipped.</div>
+    <div class="import-drop" id="importDrop" onclick="document.getElementById('importFile').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+      <div class="import-drop-icon">📂</div>
+      <div class="import-drop-text">Tap to choose file or <b>drag & drop</b><br><span style="font-size:11px;margin-top:4px;display:block;">.xlsx files only</span></div>
+    </div>
+    <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImportFile(event)"/>
+    <div id="importPreview" style="display:none;" class="import-preview"></div>
+    <div style="display:flex;gap:10px;margin-top:6px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closeImportModalDirect()">Cancel</button>
+      <button class="btn btn-primary" id="importConfirmBtn" style="flex:2;display:none;" onclick="confirmImport()">✅ Import Users</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROMISE TO PAY MODAL -->
+<div class="modal-overlay" id="promiseModal" onclick="closePromiseModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+      <span style="font-size:22px;">🤝</span>
+      <div class="modal-title" style="margin-bottom:0;">Promise to Pay</div>
+    </div>
+    <div class="modal-sub" id="promiseModalSub">Customer will pay by a specific date.</div>
+    <div class="promise-modal-body">
+      <div class="field">
+        <label>📅 Promise Date <span style="color:var(--danger);">*</span></label>
+        <input id="promiseDateInput" type="date"/>
+      </div>
+      <div class="field">
+        <label>📝 Note <span style="font-weight:400;color:var(--text-dim);">— e.g. "will pay after salary"</span></label>
+        <input id="promiseNoteInput" placeholder="Optional note…"/>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closePromiseModalDirect()">Cancel</button>
+      <button class="btn btn-primary" style="flex:2;" onclick="confirmSetPromise()">🤝 Set Promise</button>
+    </div>
+    <div id="clearPromiseSection" style="display:none;margin-top:10px;">
+      <button class="btn btn-danger" onclick="clearPromise()">🗑️ Remove Promise</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROMISE WHATSAPP MODAL -->
+<div class="modal-overlay" id="promiseWAModal" onclick="closePromiseWAModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💬 Send Reminder</div>
+    <div class="modal-sub">WhatsApp reminder for overdue promises.</div>
+    <div id="promiseWAPreview" style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.75;white-space:pre-wrap;font-family:'JetBrains Mono',monospace;max-height:240px;overflow-y:auto;color:var(--text);margin-bottom:14px;word-break:break-word;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" style="flex:1;" onclick="closePromiseWAModal(event,true)">Close</button>
+      <button class="btn btn-secondary" style="flex:1;" onclick="copyPromiseWA()">📋 Copy</button>
+      <button class="btn btn-primary" style="flex:2;background:linear-gradient(135deg,#25D366,#128C7E);border:none;" onclick="openPromiseWA()">💬 WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="tabnav">
+  <button class="tabBtn active" onclick="switchTab(0)">
+    <span class="tabBtn-icon">📊</span>
+    <span>Dashboard</span>
+  </button>
+  <button class="tabBtn" onclick="switchTab(1)">
+    <span class="tabBtn-icon">👥</span>
+    <span>Users</span>
+  </button>
+  <button class="tabBtn tabBtn-add" onclick="switchTab(2)">
+    <span class="tabBtn-icon">➕</span>
+    <span>Add</span>
+  </button>
+  <button class="tabBtn" onclick="switchTab(3)">
+    <span class="tabBtn-icon">🔍</span>
+    <span>Search</span>
+  </button>
+  <button class="tabBtn" onclick="switchTab(4)">
+    <span class="tabBtn-icon">⚙️</span>
+    <span>Settings</span>
+  </button>
+  <span class="tabnav-footer">ISP Bill Collector v2</span>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+// ── ACCESS CONTROL (simple login gate) ────────────────────────────
+// NOTE: this is a basic client-side gate (credentials live in this
+// file), suitable for keeping casual visitors out — not a substitute
+// for real server-side authentication if the data itself is sensitive.
+const AUTH_KEY  = "isp_auth_v1";
+const AUTH_USER = "redwan";
+const AUTH_PASS = "redwan127";
+
+function attemptLogin(){
+  const u = document.getElementById("loginUser").value.trim();
+  const p = document.getElementById("loginPass").value;
+  const err = document.getElementById("loginError");
+  if(u === AUTH_USER && p === AUTH_PASS){
+    try{ localStorage.setItem(AUTH_KEY, "1"); }catch{}
+    err.style.display = "none";
+    document.body.classList.remove("locked");
+  } else {
+    err.style.display = "block";
+    document.getElementById("loginPass").value = "";
+    document.getElementById("loginPass").focus();
+  }
+}
+
+function logout(){
+  try{ sessionStorage.removeItem(AUTH_KEY); localStorage.removeItem(AUTH_KEY); }catch{}
+  document.getElementById("loginUser").value = "";
+  document.getElementById("loginPass").value = "";
+  document.body.classList.add("locked");
+}
+
+// Unlock immediately if this device already signed in before
+(function checkAuth(){
+  try{
+    if(localStorage.getItem(AUTH_KEY) === "1") document.body.classList.remove("locked");
+  }catch{}
+})();
+
+// ── LAZY-LOAD HELPERS (export/import libraries) ───────────────────
+// xlsx (~900KB) and jsPDF+autotable (~450KB) are only needed when the
+// user actually exports/imports data, so they're fetched on first use
+// instead of blocking the initial page load.
+const _loadedScripts = {};
+function loadScript(src){
+  if(_loadedScripts[src]) return _loadedScripts[src];
+  _loadedScripts[src] = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Failed to load " + src));
+    document.head.appendChild(s);
+  });
+  return _loadedScripts[src];
+}
+function loadXLSX(){
+  if(window.XLSX) return Promise.resolve();
+  return loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+}
+function loadPDFLibs(){
+  const jspdfReady = window.jspdf
+    ? Promise.resolve()
+    : loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+  return jspdfReady.then(() => {
+    if(window.jspdf?.jsPDF?.API?.autoTable) return;
+    return loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+  });
+}
+
+// ── DATA ─────────────────────────────────────────────────────────
+const PACKAGES = [
+  {mbps:"5 Mbps",bill:400},{mbps:"10 Mbps",bill:500},{mbps:"15 Mbps",bill:600},
+  {mbps:"20 Mbps",bill:620},{mbps:"30 Mbps",bill:650},{mbps:"50 Mbps",bill:800},
+  {mbps:"70 Mbps",bill:1000},{mbps:"90 Mbps",bill:1200},{mbps:"120 Mbps",bill:1500},{mbps:"150 Mbps",bill:2000}
+];
+// packageBills: overrides for default package bills, e.g. {"10 Mbps": 550}
+let packageBills = {};
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function updateCompanyHeader(){
+  const el=document.getElementById("hCompany");
+  if(!el) return;
+  const img=el.querySelector(".wifi-logo");
+  const wifiHTML = img ? img.outerHTML : '';
+  const name = (settings.company||"").replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+  el.innerHTML = wifiHTML + ` <span class="company-name">${name}</span>`;
+}
+const CUR_YEAR = new Date().getFullYear();
+const YEARS = Array.from({length:6},(_,i)=>CUR_YEAR-1+i);
+
+const SEED_USERS = [
+  {id:1,name:"Md. Alam",area:"kollogram",collector:"Rahim",pkg:"15 Mbps",paid:0,date:""},
+  {id:2,name:"Sohel Rana",area:"Area-A",collector:"Rahim",pkg:"10 Mbps",paid:0,date:""},
+  {id:3,name:"Kamal Hossain",area:"Area-A",collector:"Rahim",pkg:"5 Mbps",paid:500,date:""},
+  {id:4,name:"Riya Begum",area:"Area-B",collector:"Karim",pkg:"10 Mbps",paid:600,date:""},
+  {id:5,name:"Nasrin Akter",area:"Area-B",collector:"Karim",pkg:"10 Mbps",paid:500,date:""},
+  {id:6,name:"Tariq Ahmed",area:"Area-B",collector:"Karim",pkg:"20 Mbps",paid:300,date:""},
+  {id:7,name:"Jakir Hossain",area:"Area-A",collector:"Rahim",pkg:"5 Mbps",paid:400,date:""},
+];
+const DEFAULT_SETTINGS = {
+  company:"My Company",
+  month:MONTHS[new Date().getMonth()],
+  year:String(CUR_YEAR),
+  collectors:["Rahim","Karim"]
+};
+
+function load(key,def){try{const d=localStorage.getItem(key);return d?JSON.parse(d):def;}catch{return def;}}
+function save(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch{}}
+
+// ── MULTI-MONTH KEY HELPERS ──────────────────────────────────────
+// Each month stores users under a unique key: isp_users_v1__Month_Year
+// Settings and packageBills are global (shared across months).
+function monthKey(month, year){ return `isp_users_v1__${month}_${year}`; }
+function currentMonthKey(){ return monthKey(settings.month, settings.year); }
+
+// Returns all month keys that have user data stored locally
+function getAllMonthsWithData(){
+  const result = [];
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && k.startsWith("isp_users_v1__")){
+        const part = k.replace("isp_users_v1__","");
+        const lastUnderscore = part.lastIndexOf("_");
+        if(lastUnderscore>0){
+          const m = part.slice(0, lastUnderscore);
+          const y = part.slice(lastUnderscore+1);
+          if(MONTHS.includes(m) && /^\d{4}$/.test(y)) result.push({month:m,year:y,key:k});
+        }
+      }
+    }
+  }catch{}
+  return result;
+}
+
+// ── CLOUD SYNC (Supabase) ────────────────────────────────────────
+const SUPABASE_URL = "https://smbdiyepsnvxvoemcfqj.supabase.co";
+const SUPABASE_KEY = "sb_publishable_qpgE1eI7DHjdJzlc1oAbXA_fgRk7dVq";
+const sb = (SUPABASE_URL.startsWith("http")) ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+async function cloudSave(key,val){
+  save(key,val); // instant local cache
+  if(!sb) return;
+  try{
+    const {error}=await sb.from("app_data").upsert({key,value:val,updated_at:new Date().toISOString()});
+    if(error) throw error;
+    setSyncStatus("☁️ Synced",true);
+  }catch(e){
+    console.warn("Cloud save failed:",e.message);
+    setSyncStatus("⚠️ Not synced (saved locally)",false);
+  }
+}
+
+function setSyncStatus(text,ok){
+  const el=document.getElementById("syncStatus");
+  if(!el) return;
+  el.textContent=text;
+  el.style.color=ok?"var(--success)":"var(--warning)";
+}
+
+async function cloudLoadAll(){
+  if(!sb){setSyncStatus("⚠️ Cloud not configured — local only",false);return;}
+  try{
+    // Load settings and packageBills (global)
+    // For users: load ALL month keys that exist in Supabase
+    const {data,error}=await sb.from("app_data").select("*");
+    if(error) throw error;
+    const map={}; data.forEach(r=>map[r.key]=r.value);
+
+    // Restore all month data into localStorage
+    Object.entries(map).forEach(([k,v])=>{
+      if(k.startsWith("isp_users_v1__") || k==="isp_settings_v1" || k==="isp_pkg_bills_v1"){
+        save(k,v);
+      }
+    });
+
+    if(map.isp_settings_v1) settings=map.isp_settings_v1; else cloudSave("isp_settings_v1",settings);
+    if(map.isp_pkg_bills_v1) packageBills=map.isp_pkg_bills_v1; else cloudSave("isp_pkg_bills_v1",packageBills);
+
+    // Load users for current month
+    const mk = currentMonthKey();
+    if(map[mk]) users=map[mk];
+    else if(!map[mk] && map["isp_users_v1"]) {
+      // Migrate legacy key on first run
+      users=map["isp_users_v1"];
+      cloudSave(mk, users);
+    } else {
+      cloudSave(mk,users);
+    }
+    save(mk,users);
+
+    setSyncStatus("☁️ Synced",true);
+  }catch(e){
+    console.warn("Cloud load failed:",e.message);
+    setSyncStatus("⚠️ Offline — showing local data",false);
+  }
+}
+
+let settings = load("isp_settings_v1", DEFAULT_SETTINGS);
+packageBills  = load("isp_pkg_bills_v1", {});
+if(!settings.collectors) settings.collectors = ["Rahim","Karim"];
+
+// Migrate from old flat key if needed
+const _legacyUsers = load("isp_users_v1", null);
+if(_legacyUsers && !load(monthKey(settings.month, settings.year), null)){
+  save(monthKey(settings.month, settings.year), _legacyUsers);
+}
+
+let users = load(currentMonthKey(), load("isp_users_v1", SEED_USERS));
+
+// ── MONTH SWITCHER LOGIC ─────────────────────────────────────────
+let _pickerYear = parseInt(settings.year) || CUR_YEAR;
+let _pendingMonth = null;
+let _pendingYear  = null;
+
+function updateMonthHeader(){
+  const label = settings.month+" "+settings.year;
+  const el = document.getElementById("hMonth");
+  const sw = document.getElementById("monthSwitcherLabel");
+  const dot = document.getElementById("monthDot");
+  if(el) el.textContent = label;
+  if(sw) sw.textContent = label;
+  // dot color: green if month has data, grey if empty
+  const mk = currentMonthKey();
+  const monthUsers = load(mk, null);
+  if(dot) dot.className = "month-dot" + (monthUsers && monthUsers.length > 0 ? "" : " empty");
+}
+
+function openMonthPicker(){
+  _pickerYear = parseInt(settings.year) || CUR_YEAR;
+  _pendingMonth = null; _pendingYear = null;
+  renderMonthPickerGrid();
+  document.getElementById("monthPickerInfo").style.display="none";
+  document.getElementById("monthCopySection").style.display="none";
+  document.getElementById("monthPickerConfirm").textContent="Switch Month";
+  document.getElementById("monthPickerModal").classList.add("open");
+}
+
+function closeMonthPickerModal(e){
+  if(e.target===document.getElementById("monthPickerModal")) closeMonthPickerDirect();
+}
+function closeMonthPickerDirect(){
+  document.getElementById("monthPickerModal").classList.remove("open");
+}
+
+function shiftPickerYear(d){
+  _pickerYear += d;
+  renderMonthPickerGrid();
+}
+
+function renderMonthPickerGrid(){
+  document.getElementById("pickerYear").textContent = _pickerYear;
+  const allData = getAllMonthsWithData();
+  const dataSet = new Set(allData.map(x=>x.month+"_"+x.year));
+  document.getElementById("monthPickerGrid").innerHTML = MONTHS.map(m=>{
+    const key = m+"_"+_pickerYear;
+    const isCurrent = m===settings.month && String(_pickerYear)===settings.year;
+    const isPending  = m===_pendingMonth && String(_pickerYear)===_pendingYear;
+    const hasData    = dataSet.has(key);
+    return `<button class="month-picker-btn ${isCurrent||isPending?"active":""} ${hasData?"has-data":""}"
+      onclick="selectPickerMonth('${m}','${_pickerYear}')">
+      <span>${m.slice(0,3)}</span>
+      <div class="mp-dot"></div>
+    </button>`;
+  }).join("");
+}
+
+function selectPickerMonth(month, year){
+  _pendingMonth = month;
+  _pendingYear  = String(year);
+  renderMonthPickerGrid();
+
+  const mk = monthKey(month, year);
+  const monthUsers = load(mk, null);
+  const isCurrent = month===settings.month && String(year)===settings.year;
+  const infoEl = document.getElementById("monthPickerInfo");
+  const copySection = document.getElementById("monthCopySection");
+
+  if(isCurrent){
+    infoEl.innerHTML=`<b style="color:var(--accent-2);">📅 This is the current month.</b>`;
+    infoEl.style.display="block";
+    copySection.style.display="block";
+    populateCopyFromSelect(month, year);
+    document.getElementById("monthPickerConfirm").textContent="Stay on this month";
+  } else if(monthUsers && monthUsers.length>0){
+    infoEl.innerHTML=`✅ <b style="color:var(--success);">${monthUsers.length} users</b> found for <b>${month} ${year}</b>. Switching will load their data.`;
+    infoEl.style.display="block";
+    copySection.style.display="none";
+    document.getElementById("monthPickerConfirm").textContent=`Switch to ${month} ${year}`;
+  } else {
+    infoEl.innerHTML=`📭 <b>${month} ${year}</b> has no data yet. Switching will start a blank month.<br><span style="font-size:11px;color:var(--text-dim);">Tip: Use "Copy users" below to start from a past month.</span>`;
+    infoEl.style.display="block";
+    copySection.style.display="block";
+    populateCopyFromSelect(month, year);
+    document.getElementById("monthPickerConfirm").textContent=`Switch to ${month} ${year}`;
+  }
+}
+
+function populateCopyFromSelect(targetMonth, targetYear){
+  const allData = getAllMonthsWithData();
+  const others = allData.filter(x=>!(x.month===targetMonth && x.year===String(targetYear)));
+  // Sort descending (most recent first)
+  others.sort((a,b)=>{
+    const ya=parseInt(a.year), yb=parseInt(b.year);
+    if(ya!==yb) return yb-ya;
+    return MONTHS.indexOf(b.month)-MONTHS.indexOf(a.month);
+  });
+  const sel = document.getElementById("copyFromMonthSel");
+  sel.innerHTML = others.length
+    ? others.map(x=>{
+        const cnt = load(x.key,[]).length;
+        return `<option value="${x.key}">${x.month} ${x.year} (${cnt} users)</option>`;
+      }).join("")
+    : `<option value="">— No other months with data —</option>`;
+}
+
+function confirmMonthSwitch(){
+  if(!_pendingMonth || !_pendingYear) { closeMonthPickerDirect(); return; }
+  if(_pendingMonth===settings.month && _pendingYear===settings.year){
+    closeMonthPickerDirect(); return;
+  }
+  // Save current users under current month key before switching
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(), users);
+  // Switch
+  invalidateEnrichedCache(); settings.month = _pendingMonth;
+  settings.year  = _pendingYear;
+  cloudSave("isp_settings_v1", settings);
+  // Load users for new month
+  users = load(currentMonthKey(), []);
+  // Update UI
+  updateMonthHeader();
+  closeMonthPickerDirect();
+  renderDashboard();
+  if(currentTab===1) renderUsers();
+  showToast(`📅 Switched to ${settings.month} ${settings.year}`);
+}
+
+function copyUsersFromMonth(){
+  const sel = document.getElementById("copyFromMonthSel");
+  const srcKey = sel.value;
+  if(!srcKey){ showToast("⚠️ No source month selected"); return; }
+  const srcUsers = load(srcKey, []);
+  if(!srcUsers.length){ showToast("⚠️ Source month has no users"); return; }
+
+  // Ensure we're on the pending month
+  if(_pendingMonth && (_pendingMonth!==settings.month || _pendingYear!==settings.year)){
+    invalidateEnrichedCache(); cloudSave(currentMonthKey(), users);
+    invalidateEnrichedCache(); settings.month = _pendingMonth;
+    settings.year  = _pendingYear;
+    cloudSave("isp_settings_v1", settings);
+    users = load(currentMonthKey(), []);
+  }
+
+  // Merge: copy users from source with paid=0, date="", skip existing IDs
+  const existingIds = new Set(users.map(u=>u.id));
+  let added = 0;
+  srcUsers.forEach(u=>{
+    if(!existingIds.has(u.id)){
+      users.push({...u, paid:0, date:""});
+      existingIds.add(u.id);
+      added++;
+    }
+  });
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(), users);
+  updateMonthHeader();
+  closeMonthPickerDirect();
+  renderDashboard();
+  if(currentTab===1) renderUsers();
+  showToast(`✅ Copied ${added} users to ${settings.month} ${settings.year} (paid reset)`);
+}
+
+let editId = null;
+let currentTab = 0;
+let userFilter = { status:null, search:"", promise:false };
+let userPage = 1;
+const USERS_PER_PAGE = 20;
+let bulkMode = false;
+let bulkSelected = new Set();
+let _promiseUserId = null; // which user the promise modal is for
+let _promiseWAText = "";   // cached WA text for the promise reminder modal
+
+// ── PROMISE TO PAY HELPERS ───────────────────────────────────────
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+function promiseDaysDiff(promiseDate){
+  // positive = days until due, negative = days overdue, 0 = today
+  const today = new Date(); today.setHours(0,0,0,0);
+  const pd    = new Date(promiseDate); pd.setHours(0,0,0,0);
+  return Math.round((pd - today) / 86400000);
+}
+
+function getPromiseStatus(u){
+  if(!u.promiseDate) return null;
+  const diff = promiseDaysDiff(u.promiseDate);
+  if(diff < 0)  return { type:"overdue",  label:`⚠️ ${Math.abs(diff)}d overdue`, cls:"overdue" };
+  if(diff === 0) return { type:"due-today", label:"🔴 Due today!",                cls:"due-today" };
+  return           { type:"upcoming",  label:`🤝 Due in ${diff}d`,              cls:"upcoming" };
+}
+
+// Count overdue + due-today promises (for dashboard badge)
+function countUrgentPromises(){
+  return users.filter(u=>{
+    if(!u.promiseDate) return false;
+    const bill = getBill(u.pkg, u.customBill);
+    if(getStatus(bill, u.paid) === "PAID") return false; // auto-cleared
+    const diff = promiseDaysDiff(u.promiseDate);
+    return diff <= 0;
+  }).length;
+}
+
+// ── PROMISE ALERT CARD (dashboard) ──────────────────────────────
+function renderPromiseAlert(){
+  const card = document.getElementById("promiseAlertCard");
+  if(!card) return;
+
+  const today = todayStr();
+  const promises = users
+    .map(u=>{ const bill=getBill(u.pkg,u.customBill); return {...u,bill,balance:bill-u.paid,status:getStatus(bill,u.paid)}; })
+    .filter(u=> u.promiseDate && u.status!=="PAID")
+    .sort((a,b)=>{
+      const da=promiseDaysDiff(a.promiseDate), db=promiseDaysDiff(b.promiseDate);
+      return da - db; // overdue first
+    });
+
+  if(promises.length === 0){ card.style.display="none"; return; }
+
+  const overdue  = promises.filter(u=>promiseDaysDiff(u.promiseDate)<0);
+  const dueToday = promises.filter(u=>promiseDaysDiff(u.promiseDate)===0);
+  const upcoming = promises.filter(u=>promiseDaysDiff(u.promiseDate)>0);
+
+  const urgentCount = overdue.length + dueToday.length;
+  const titleText = urgentCount > 0
+    ? `🔔 ${urgentCount} Promise${urgentCount>1?"s":""} Need Attention`
+    : `🤝 ${upcoming.length} Upcoming Promise${upcoming.length>1?"s":""}`;
+
+  card.style.display="block";
+  card.innerHTML=`
+  <div class="promise-alert-card">
+    <div class="promise-alert-header">
+      <div class="promise-alert-title">${titleText}</div>
+      ${urgentCount>0?`<button class="btn btn-secondary btn-small" onclick="openPromiseWABulk()" style="font-size:10px;padding:4px 8px;background:linear-gradient(135deg,#25D366,#128C7E);color:#fff;border:none;">💬 Remind All</button>`:""}
+    </div>
+    <div class="promise-list-scroll">
+    ${promises.map(u=>{
+      const ps = getPromiseStatus(u);
+      return `
+      <div class="promise-item ${ps.cls}" onclick="startEdit(${u.id})">
+        <div style="display:flex;flex-direction:column;gap:1px;min-width:0;">
+          <div class="promise-item-name">#${u.id} ${u.name}</div>
+          <div class="promise-item-meta">${u.area} · ${fmt(u.balance)}${u.promiseNote?` · <em>${u.promiseNote}</em>`:""}</div>
+        </div>
+        <span class="promise-badge ${ps.cls}" style="flex-shrink:0;">${ps.label}</span>
+      </div>`;
+    }).join("")}
+    </div>
+  </div>`;
+}
+
+function quickMarkPaid(id){
+  const u = users.find(x=>x.id===id); if(!u) return;
+  const bill = getBill(u.pkg, u.customBill);
+  users = users.map(x=>x.id===id ? {...x, paid:bill, date:todayStr(), promiseDate:undefined, promiseNote:undefined} : x);
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(), users);
+  renderDashboard();
+  if(currentTab===1) renderUsers();
+  showToast(`✅ #${id} ${u.name} marked as paid!`);
+}
+
+// ── PROMISE MODAL ────────────────────────────────────────────────
+function openPromiseModal(userId){
+  _promiseUserId = userId;
+  const u = users.find(x=>x.id===userId);
+  if(!u) return;
+  const bill = getBill(u.pkg, u.customBill);
+  document.getElementById("promiseModalSub").textContent =
+    `#${u.id} ${u.name} · Due: ${fmt(bill - u.paid)}`;
+  // Default: tomorrow
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  document.getElementById("promiseDateInput").value = u.promiseDate || tomorrow.toISOString().slice(0,10);
+  document.getElementById("promiseNoteInput").value = u.promiseNote || "";
+  document.getElementById("clearPromiseSection").style.display = u.promiseDate ? "block" : "none";
+  document.getElementById("promiseModal").classList.add("open");
+}
+
+function closePromiseModal(e){
+  if(e.target===document.getElementById("promiseModal")) closePromiseModalDirect();
+}
+function closePromiseModalDirect(){
+  document.getElementById("promiseModal").classList.remove("open");
+}
+
+function confirmSetPromise(){
+  const date = document.getElementById("promiseDateInput").value;
+  if(!date){ showToast("⚠️ Please pick a date"); return; }
+  const note = document.getElementById("promiseNoteInput").value.trim();
+  users = users.map(u=> u.id===_promiseUserId ? {...u, promiseDate:date, promiseNote:note||undefined} : u);
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(), users);
+  closePromiseModalDirect();
+  renderDashboard();
+  if(currentTab===1) renderUsers();
+  showToast("🤝 Promise set!");
+}
+
+function clearPromise(){
+  users = users.map(u=> u.id===_promiseUserId ? {...u, promiseDate:undefined, promiseNote:undefined} : u);
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(), users);
+  closePromiseModalDirect();
+  renderDashboard();
+  if(currentTab===1) renderUsers();
+  showToast("Promise removed");
+}
+
+// ── PROMISE WHATSAPP ─────────────────────────────────────────────
+function buildSinglePromiseWA(u){
+  const bill = getBill(u.pkg, u.customBill);
+  const balance = bill - u.paid;
+  const ps = getPromiseStatus(u);
+  return `🌐 *${settings.company}*\n📅 ${settings.month} ${settings.year}\n\nআসসালামু আলাইকুম *${u.name}* ভাই,\n\nআপনার ইন্টারনেট বিল বাকি রয়েছে:\n💰 বকেয়া: *${fmt(balance)}*\n📦 প্যাকেজ: ${u.pkg}\n${ps ? `📌 প্রতিশ্রুতির তারিখ: ${u.promiseDate} (${ps.label})\n` : ""}${u.promiseNote ? `📝 নোট: "${u.promiseNote}"\n` : ""}\nঅনুগ্রহ করে দ্রুত পরিশোধ করুন। ধন্যবাদ।\n\n_${settings.company}_`;
+}
+
+function openSinglePromiseWA(userId){
+  const u = users.find(x=>x.id===userId); if(!u) return;
+  _promiseWAText = buildSinglePromiseWA(u);
+  document.getElementById("promiseWAPreview").textContent = _promiseWAText;
+  document.getElementById("promiseWAModal").classList.add("open");
+}
+
+function openPromiseWABulk(){
+  const overdueUsers = users
+    .map(u=>{ const bill=getBill(u.pkg,u.customBill); return {...u,bill,balance:bill-u.paid,status:getStatus(bill,u.paid)}; })
+    .filter(u=> u.promiseDate && u.status!=="PAID" && promiseDaysDiff(u.promiseDate)<=0)
+    .sort((a,b)=>promiseDaysDiff(a.promiseDate)-promiseDaysDiff(b.promiseDate));
+
+  if(!overdueUsers.length){ showToast("No overdue promises!"); return; }
+
+  _promiseWAText = `🌐 *${settings.company}* — ${settings.month} ${settings.year}\n🔔 *বকেয়া বিল অনুস্মারক*\n${"━".repeat(22)}\n\n` +
+    overdueUsers.map((u,i)=>{
+      const ps = getPromiseStatus(u);
+      return `${i+1}. *#${u.id} ${u.name}*\n   ${u.area} · ${u.pkg}\n   💰 বকেয়া: ${fmt(u.balance)} ${ps?`· ${ps.label}`:""}\n   ${u.promiseNote?`📝 "${u.promiseNote}"\n`:``}`;
+    }).join("\n") +
+    `\n${"━".repeat(22)}\nমোট ${overdueUsers.length} জন · মোট বকেয়া: *${fmt(overdueUsers.reduce((s,u)=>s+u.balance,0))}*`;
+
+  document.getElementById("promiseWAPreview").textContent = _promiseWAText;
+  document.getElementById("promiseWAModal").classList.add("open");
+}
+
+function closePromiseWAModal(e, force){
+  if(force || e.target===document.getElementById("promiseWAModal"))
+    document.getElementById("promiseWAModal").classList.remove("open");
+}
+
+function copyPromiseWA(){
+  navigator.clipboard.writeText(_promiseWAText).then(()=>showToast("📋 Copied!")).catch(()=>{
+    const ta=document.createElement("textarea"); ta.value=_promiseWAText;
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+    document.body.removeChild(ta); showToast("📋 Copied!");
+  });
+}
+function openPromiseWA(){
+  window.open(`https://wa.me/?text=${encodeURIComponent(_promiseWAText)}`,"_blank");
+}
+
+function setPromiseFilter(){
+  userFilter.promise = true;
+  userFilter.status  = null;
+  userPage = 1;
+  if(currentTab === 1){
+    renderUsers();
+  } else {
+    switchTab(1);
+  }
+}
+
+function goToUsers(status){
+  userFilter.status = status;
+  userFilter.promise = false;
+  switchTab(1);
+}
+
+// ── HELPERS ──────────────────────────────────────────────────────
+// getBill: per-user customBill > packageBills override > default package bill
+const getPkgDefaultBill = pkg => {
+  if(packageBills[pkg] !== undefined) return packageBills[pkg];
+  return (PACKAGES.find(p=>p.mbps===pkg)||{bill:0}).bill;
+};
+const getBill = (pkg, customBill) => (customBill !== undefined && customBill !== null && customBill !== "") ? Number(customBill) : getPkgDefaultBill(pkg);
+const getStatus = (bill,paid) => paid===0?"UNPAID":paid>=bill?"PAID":"PARTIAL";
+const fmt       = n => "৳"+Number(n).toLocaleString();
+
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.style.display="block";
+  clearTimeout(t._t); t._t=setTimeout(()=>t.style.display="none",2200);
+}
+
+// ── TABS ─────────────────────────────────────────────────────────
+function switchTab(i){
+  // Exit bulk mode if leaving users tab
+  if(i !== 1 && bulkMode) toggleBulkMode();
+  document.querySelectorAll(".page").forEach((p,idx)=>p.classList.toggle("active",idx===i));
+  document.querySelectorAll(".tabBtn").forEach((b,idx)=>b.classList.toggle("active",idx===i));
+  currentTab=i;
+  if(i===0) renderDashboard();
+  if(i===1) renderUsers();
+  if(i===2 && editId===null) setupAddForm();
+  if(i===4) setupSettings();
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────────
+function renderDashboard(){
+  const enriched = users.map(u=>{const bill=getBill(u.pkg,u.customBill);return{...u,bill,balance:bill-u.paid,status:getStatus(bill,u.paid)};});
+  const billed      = enriched.reduce((a,u)=>a+u.bill,0);
+  const collected   = enriched.reduce((a,u)=>a+u.paid,0);
+  const outstanding = enriched.reduce((a,u)=>a+u.balance,0);
+  document.getElementById("kTotal").textContent       = enriched.length;
+  document.getElementById("kBilled").textContent      = fmt(billed);
+  document.getElementById("kCollected").textContent   = fmt(collected);
+  document.getElementById("kOutstanding").textContent = fmt(outstanding);
+  document.getElementById("dPaid").textContent    = enriched.filter(u=>u.status==="PAID").length;
+  document.getElementById("dPartial").textContent = enriched.filter(u=>u.status==="PARTIAL").length;
+  document.getElementById("dUnpaid").textContent  = enriched.filter(u=>u.status==="UNPAID").length;
+
+  const cols = [...new Set(enriched.map(u=>u.collector))].map(c=>{
+    const cu=enriched.filter(u=>u.collector===c);
+    const billed=cu.reduce((a,u)=>a+u.bill,0);
+    const collected=cu.reduce((a,u)=>a+u.paid,0);
+    const due=billed-collected;
+    const pct=billed>0?Math.round((collected/billed)*100):0;
+    return {name:c||"⚠️ Unassigned",users:cu.length,billed,collected,due,pct};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  document.getElementById("collectorStats").innerHTML = cols.length===0
+    ? '<div class="empty-msg" style="padding:16px 0;">No collectors yet.</div>'
+    : cols.map((c,i)=>{
+        const barColor = c.pct>=80
+          ? "linear-gradient(90deg,var(--success),#2dd4a0)"
+          : c.pct>=40
+          ? "linear-gradient(90deg,var(--warning),#f0b429)"
+          : "linear-gradient(90deg,var(--danger),#f87171)";
+        const pctColor = c.pct>=80?"var(--success)":c.pct>=40?"var(--warning)":"var(--danger)";
+        const rankEmoji = i===0?"🥇":i===1?"🥈":i===2?"🥉":"";
+        return `
+        <div class="coll-item">
+          <div class="coll-item-top">
+            <span class="coll-item-name">${rankEmoji?`<span>${rankEmoji}</span>`:""}<span>${c.name}</span><span style="color:var(--text-dim);font-size:12px;font-weight:600;">${c.users} user${c.users!==1?"s":""}</span></span>
+            <span class="coll-item-pct" style="color:${pctColor};">${c.pct}%</span>
+          </div>
+          <div class="coll-bar-bg">
+            <div class="coll-bar-fill" style="width:${c.pct}%;background:${barColor};"></div>
+          </div>
+          <div class="coll-item-meta">
+            <span>Billed: <b style="color:var(--text);">${fmt(c.billed)}</b></span>
+            <span>Collected: <b style="color:var(--success);">${fmt(c.collected)}</b></span>
+            <span>Due: <b style="color:var(--danger);">${fmt(c.due)}</b></span>
+          </div>
+        </div>`;
+      }).join("");
+
+  // ── AREA RANKING ──────────────────────────────────────────────
+  const areaMap = {};
+  enriched.forEach(u=>{
+    const a = u.area||"—";
+    if(!areaMap[a]) areaMap[a]={name:a,users:0,billed:0,collected:0,paid:0,partial:0,unpaid:0};
+    areaMap[a].users++;
+    areaMap[a].billed += u.bill;
+    areaMap[a].collected += u.paid;
+    if(u.status==="PAID") areaMap[a].paid++;
+    else if(u.status==="PARTIAL") areaMap[a].partial++;
+    else areaMap[a].unpaid++;
+  });
+  const areas = Object.values(areaMap).sort((a,b)=>b.collected-a.collected);
+  const maxCollected = areas.length ? areas[0].collected : 1;
+  const rankColors = [
+    "linear-gradient(90deg,#f59e0b,#fbbf24)",
+    "linear-gradient(90deg,#94a3b8,#e2e8f0)",
+    "linear-gradient(90deg,#b45309,#f59e0b)",
+  ];
+  document.getElementById("areaStats").innerHTML = areas.length === 0
+    ? '<div class="empty-msg" style="padding:20px 0;">No area data yet.</div>'
+    : areas.map((a,i)=>{
+        const pct = maxCollected > 0 ? Math.round((a.collected/maxCollected)*100) : 0;
+        const collPct = a.billed > 0 ? Math.round((a.collected/a.billed)*100) : 0;
+        const rankClass = i===0?"rank-1":i===1?"rank-2":i===2?"rank-3":"rank-other";
+        const barColor = i < 3 ? rankColors[i] : "linear-gradient(90deg,var(--accent),var(--accent-2))";
+        const medalColors = ["#f59e0b","#94a3b8","#b45309"];
+        const badgeBg = i<3 ? medalColors[i] : "var(--border-strong)";
+        return `
+        <div class="area-box ${rankClass}">
+          <div class="area-box-header">
+            <div class="area-badge" style="background:${badgeBg};color:${i===1?"#000":"#fff"};flex-shrink:0;">${i+1}</div>
+            <div class="area-box-name">${a.name}</div>
+            <div class="area-box-pct" style="color:${collPct>=80?"var(--success)":collPct>=40?"var(--warning)":"var(--danger)"};">${collPct}%</div>
+          </div>
+          <div class="area-bar-bg" style="margin:8px 0 6px;">
+            <div class="area-bar-fill" style="width:${pct}%;background:${barColor};"></div>
+          </div>
+          <div class="area-box-stats">
+            <div class="area-stat-item">
+              <span class="area-stat-label">Billed</span>
+              <span class="area-stat-value" style="color:var(--accent-2);">${fmt(a.billed)}</span>
+            </div>
+            <div class="area-stat-item">
+              <span class="area-stat-label">Collected</span>
+              <span class="area-stat-value" style="color:var(--success);">${fmt(a.collected)}</span>
+            </div>
+            <div class="area-stat-item">
+              <span class="area-stat-label">Due</span>
+              <span class="area-stat-value" style="color:var(--danger);">${fmt(a.billed-a.collected)}</span>
+            </div>
+          </div>
+          <div class="area-box-pills">
+            <span class="area-pill-paid">✅ ${a.paid}</span>
+            <span class="area-pill-partial">⚠️ ${a.partial}</span>
+            <span class="area-pill-unpaid">⛔ ${a.unpaid}</span>
+            <span style="color:var(--text-dim);font-size:11px;margin-left:auto;">${a.users} user${a.users!==1?"s":""}</span>
+          </div>
+        </div>`;
+      }).join("");
+
+  updateCompanyHeader();
+  const hMonth = document.getElementById("hMonth");
+  if(hMonth) hMonth.textContent = settings.month+" "+settings.year;
+
+  // Render promise alert card
+  renderPromiseAlert();
+}
+
+// ── USERS ────────────────────────────────────────────────────────
+// ── PERFORMANCE: debounce + cache ────────────────────────────────
+let _enrichedCache = null;
+let _enrichedCacheKey = null;
+let _renderDebounceTimer = null;
+
+function invalidateEnrichedCache(){ _enrichedCache = null; _enrichedCacheKey = null; }
+
+function getEnrichedCached(){
+  const key = currentMonthKey() + "|" + users.length + "|" + JSON.stringify(users.map(u=>u.id+u.paid+u.status));
+  if(_enrichedCache && _enrichedCacheKey === key) return _enrichedCache;
+  _enrichedCache = users.map(u=>{
+    const bill = getBill(u.pkg, u.customBill);
+    return {...u, bill, balance: bill - u.paid, status: getStatus(bill, u.paid)};
+  });
+  _enrichedCacheKey = key;
+  return _enrichedCache;
+}
+
+function debouncedRenderUsers(){
+  clearTimeout(_renderDebounceTimer);
+  _renderDebounceTimer = setTimeout(()=>{ userPage = 1; renderUsers(); }, 120);
+}
+
+function getFilteredUsers(){
+  const enriched = getEnrichedCached();
+  const q = (document.getElementById("userSearchInput")?.value||"").toLowerCase().trim();
+  let filtered = enriched;
+  if(userFilter.promise){
+    filtered = filtered.filter(u=> u.promiseDate && u.status!=="PAID");
+  } else if(userFilter.status){
+    filtered = filtered.filter(u=> u.status === userFilter.status);
+  }
+  if(q) filtered = filtered.filter(u=>
+    String(u.id).includes(q) ||
+    (u.name||"").toLowerCase().includes(q) ||
+    (u.area||"").toLowerCase().includes(q) ||
+    (u.collector||"").toLowerCase().includes(q)
+  );
+  return {enriched, filtered, q};
+}
+
+function renderUsers(){
+  const {enriched, filtered, q} = getFilteredUsers();
+
+  const counts = {
+    ALL:     enriched.length,
+    PAID:    enriched.filter(u=>u.status==="PAID").length,
+    PARTIAL: enriched.filter(u=>u.status==="PARTIAL").length,
+    UNPAID:  enriched.filter(u=>u.status==="UNPAID").length,
+    PROMISE: enriched.filter(u=>u.promiseDate && u.status!=="PAID").length,
+  };
+  const chips = [
+    {key:null,      label:"All",     icon:"📋", count:counts.ALL,     promise:false},
+    {key:"PAID",    label:"Paid",    icon:"✅", count:counts.PAID,    promise:false},
+    {key:"PARTIAL", label:"Partial", icon:"⚠️", count:counts.PARTIAL, promise:false},
+    {key:"UNPAID",  label:"Unpaid",  icon:"⛔", count:counts.UNPAID,  promise:false},
+    {key:"PROMISE", label:"Promises",icon:"🤝", count:counts.PROMISE, promise:true},
+  ];
+  document.getElementById("userFilterChips").innerHTML = chips.map(c=>{
+    const active = c.promise ? userFilter.promise : (!userFilter.promise && userFilter.status===c.key);
+    const onclick = c.promise ? `setPromiseFilter()` : `setUserFilter(${c.key?`'${c.key}'`:"null"})`;
+    return `<button class="filter-chip ${active?"active":""}" onclick="${onclick}">${c.icon} ${c.label} <span>${c.count}</span></button>`;
+  }).join("");
+
+  if(filtered.length===0){
+    const msg = (userFilter.status||userFilter.promise||q) ? "No users match this filter." : "No users yet. Add one!";
+    document.getElementById("userList").innerHTML=`<div class="empty-msg">${msg}</div>`;
+    document.getElementById("userPagination").innerHTML="";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / USERS_PER_PAGE));
+  if(userPage > totalPages) userPage = totalPages;
+  if(userPage < 1) userPage = 1;
+  const startIdx = (userPage-1) * USERS_PER_PAGE;
+  const pageItems = filtered.slice(startIdx, startIdx + USERS_PER_PAGE);
+
+  document.getElementById("userList").innerHTML = pageItems.map(u=>{
+    const isChecked = bulkSelected.has(u.id);
+    const ps = getPromiseStatus(u);
+    const hasActivePromise = ps && u.status !== "PAID";
+    return `
+    <div class="user-card ${bulkMode&&isChecked?"bulk-selected":""}" style="margin-bottom:12px;${bulkMode?"cursor:pointer":""}" ${bulkMode?`onclick="toggleBulkSelect(${u.id})"`:""}>
+      <div class="user-card-top">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          ${bulkMode?`<div class="bulk-checkbox ${isChecked?"checked":""}" onclick="event.stopPropagation();toggleBulkSelect(${u.id})"></div>`:""}
+          <div>
+            <div class="user-name">#${u.id} ${u.name}</div>
+            <div class="user-meta">${u.area} · ${u.collector?u.collector:"⚠️ Unassigned"} · ${u.pkg}</div>
+            ${hasActivePromise?`<div class="promise-tag">🤝 ${ps.label}${u.promiseNote?` · "${u.promiseNote}"`:"" }</div>`:""}
+          </div>
+        </div>
+        <span class="pill pill-${u.status}">${u.status==="PAID"?"✅ PAID":u.status==="PARTIAL"?"⚠️ PARTIAL":"⛔ UNPAID"}</span>
+      </div>
+      <div class="user-amounts">
+        <span>Bill: <b style="color:var(--text);">${fmt(u.bill)}</b></span>
+        <span>Paid: <b style="color:var(--success);">${fmt(u.paid)}</b></span>
+        <span>Due: <b style="color:var(--danger);">${fmt(u.balance)}</b></span>
+      </div>
+      ${!bulkMode?`
+      <div class="user-actions">
+        <button class="btn btn-secondary btn-small" onclick="startEdit(${u.id})">✏️ Edit</button>
+        ${u.status!=="PAID"?`<button class="btn btn-secondary btn-small" onclick="openPromiseModal(${u.id})" style="color:var(--accent);">${hasActivePromise?"🤝 Edit Promise":"🤝 Promise"}</button>`:""}
+        <button class="btn btn-secondary btn-small icon-btn-red" onclick="deleteUser(${u.id})" style="color:var(--danger);">🗑️ Delete</button>
+      </div>`:""}
+    </div>`;
+  }).join("");
+
+  renderPagination(totalPages, filtered.length, startIdx, pageItems.length);
+}
+
+function goToUserPage(p){
+  userPage = p;
+  renderUsers();
+  document.getElementById("userList").scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+function renderPagination(totalPages, totalCount, startIdx, shownCount){
+  const el = document.getElementById("userPagination");
+  if(totalPages <= 1){ el.innerHTML=""; return; }
+
+  // Build a compact page-number list: first, last, current ±1, with "…" gaps
+  const pages = [];
+  for(let p=1; p<=totalPages; p++){
+    if(p===1 || p===totalPages || Math.abs(p-userPage)<=1) pages.push(p);
+    else if(pages[pages.length-1] !== "…") pages.push("…");
+  }
+
+  const numberBtns = pages.map(p=>
+    p==="…"
+      ? `<span class="page-btn" style="cursor:default;border:none;background:transparent;">…</span>`
+      : `<button class="page-btn ${p===userPage?"active":""}" onclick="goToUserPage(${p})">${p}</button>`
+  ).join("");
+
+  el.innerHTML = `
+    <button class="page-btn" onclick="goToUserPage(${userPage-1})" ${userPage<=1?"disabled":""}>‹</button>
+    ${numberBtns}
+    <button class="page-btn" onclick="goToUserPage(${userPage+1})" ${userPage>=totalPages?"disabled":""}>›</button>
+    <div class="page-info">Showing ${startIdx+1}–${startIdx+shownCount} of ${totalCount}</div>
+  `;
+}
+
+// ── WHATSAPP DUE LIST ────────────────────────────────────────────
+function openWhatsAppModal(){
+  const collectors = [...new Set(users.map(u=>u.collector||""))].filter(Boolean).sort();
+  const sel = document.getElementById("waCollector");
+  sel.innerHTML = collectors.length
+    ? collectors.map(c=>`<option value="${c}">${c}</option>`).join("")
+    : `<option value="">— No collectors —</option>`;
+  renderWAPreview();
+  document.getElementById("whatsappModal").classList.add("open");
+}
+
+function buildWAText(){
+  const collector = document.getElementById("waCollector").value;
+  const incUnpaid  = document.getElementById("waIncUnpaid").checked;
+  const incPartial = document.getElementById("waIncPartial").checked;
+  const incPaid    = document.getElementById("waIncPaid").checked;
+
+  const enriched = users
+    .map(u=>{const bill=getBill(u.pkg,u.customBill);return{...u,bill,balance:bill-u.paid,status:getStatus(bill,u.paid)};})
+    .filter(u=>(u.collector||"")=== collector)
+    .filter(u=>(u.status==="UNPAID"&&incUnpaid)||(u.status==="PARTIAL"&&incPartial)||(u.status==="PAID"&&incPaid))
+    .sort((a,b)=>{
+      const order={UNPAID:0,PARTIAL:1,PAID:2};
+      return order[a.status]-order[b.status]||a.name.localeCompare(b.name);
+    });
+
+  if(!collector) return "";
+  if(enriched.length===0) return `No users match the selected filters for ${collector}.`;
+
+  const totDue  = enriched.reduce((s,u)=>s+u.balance,0);
+  const totBill = enriched.reduce((s,u)=>s+u.bill,0);
+  const totPaid = enriched.reduce((s,u)=>s+u.paid,0);
+  const unpaidN  = enriched.filter(u=>u.status==="UNPAID").length;
+  const partialN = enriched.filter(u=>u.status==="PARTIAL").length;
+  const paidN    = enriched.filter(u=>u.status==="PAID").length;
+
+  const statusIcon = s => s==="PAID"?"✅":s==="PARTIAL"?"⚠️":"⛔";
+  const lines = enriched.map((u,i)=>{
+    const icon = statusIcon(u.status);
+    const dueStr = u.balance>0 ? ` | Due: ${fmt(u.balance)}` : "";
+    const paidStr = u.paid>0 ? ` | Paid: ${fmt(u.paid)}` : "";
+    return `${i+1}. ${icon} #${u.id} ${u.name}\n   ${u.area} · ${u.pkg}${paidStr}${dueStr}`;
+  }).join("\n\n");
+
+  const header =
+`🌐 *${settings.company}*
+📅 *${settings.month} ${settings.year}*
+👷 Collector: *${collector}*
+${"─".repeat(28)}`;
+
+  const summary =
+`${"─".repeat(28)}
+📊 *Summary*
+Total Users: ${enriched.length}${unpaidN?`  |  ⛔ Unpaid: ${unpaidN}`:""}${partialN?`  |  ⚠️ Partial: ${partialN}`:""}${paidN?`  |  ✅ Paid: ${paidN}`:""}
+Billed: ${fmt(totBill)}  |  Collected: ${fmt(totPaid)}  |  Due: *${fmt(totDue)}*`;
+
+  return `${header}\n\n${lines}\n\n${summary}`;
+}
+
+function renderWAPreview(){
+  const text = buildWAText();
+  document.getElementById("waPreview").textContent = text || "Select a collector above.";
+  const hasText = text.length > 0;
+  document.getElementById("waCopyBtn").style.opacity   = hasText?"1":".4";
+  document.getElementById("waOpenBtn").style.opacity   = hasText?"1":".4";
+  document.getElementById("waCopyBtn").style.pointerEvents = hasText?"auto":"none";
+  document.getElementById("waOpenBtn").style.pointerEvents = hasText?"auto":"none";
+}
+
+function copyWAText(){
+  const text = buildWAText();
+  if(!text) return;
+  navigator.clipboard.writeText(text).then(()=>showToast("✅ Copied to clipboard!")).catch(()=>{
+    // fallback
+    const ta=document.createElement("textarea");
+    ta.value=text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+    showToast("✅ Copied!");
+  });
+}
+
+function openWhatsApp(){
+  const text = buildWAText();
+  if(!text) return;
+  const encoded = encodeURIComponent(text);
+  window.open(`https://wa.me/?text=${encoded}`,"_blank");
+}
+
+function closeWhatsAppModal(e){
+  if(e.target===document.getElementById("whatsappModal")) closeWhatsAppModalDirect();
+}
+function closeWhatsAppModalDirect(){
+  document.getElementById("whatsappModal").classList.remove("open");
+}
+
+// ── EXPORT ───────────────────────────────────────────────────────
+function exportFileBase(suffix){
+  const stamp = new Date().toISOString().slice(0,10);
+  const company = (settings.company||"Users").replace(/[^a-z0-9]+/gi,"_");
+  return `${company}_${settings.month}_${settings.year}${suffix?"_"+suffix:""}_${stamp}`;
+}
+
+function getExportFiltered(){
+  const enriched = users.map(u=>{const bill=getBill(u.pkg,u.customBill);return{...u,bill,balance:bill-u.paid,status:getStatus(bill,u.paid)};});
+  const collector = document.getElementById("exportCollector")?.value||"";
+  const area      = document.getElementById("exportArea")?.value||"";
+  const status    = document.getElementById("exportStatus")?.value||"";
+  return enriched.filter(u=>
+    (!collector || (u.collector||"")=== collector) &&
+    (!area      || (u.area||"")     === area)      &&
+    (!status    || u.status         === status)
+  );
+}
+
+function openExportModal(){
+  // Populate collector options
+  const collectors = [...new Set(users.map(u=>u.collector||""))].filter(Boolean).sort();
+  const colSel = document.getElementById("exportCollector");
+  colSel.innerHTML = `<option value="">All Collectors</option>` +
+    collectors.map(c=>`<option value="${c}">${c}</option>`).join("");
+
+  // Populate area options
+  const areas = [...new Set(users.map(u=>u.area||""))].filter(a=>a&&a!=="—").sort();
+  const areaSel = document.getElementById("exportArea");
+  areaSel.innerHTML = `<option value="">All Areas</option>` +
+    areas.map(a=>`<option value="${a}">${a}</option>`).join("");
+
+  // Reset status
+  document.getElementById("exportStatus").value = "";
+
+  // Wire live count update
+  ["exportCollector","exportArea","exportStatus"].forEach(id=>{
+    document.getElementById(id).onchange = updateExportPreview;
+  });
+
+  updateExportPreview();
+  document.getElementById("exportModal").classList.add("open");
+}
+
+function updateExportPreview(){
+  const filtered = getExportFiltered();
+  const totals = filtered.reduce((a,u)=>({bill:a.bill+u.bill,paid:a.paid+u.paid,due:a.due+u.balance}),{bill:0,paid:0,due:0});
+  const paid    = filtered.filter(u=>u.status==="PAID").length;
+  const partial = filtered.filter(u=>u.status==="PARTIAL").length;
+  const unpaid  = filtered.filter(u=>u.status==="UNPAID").length;
+  document.getElementById("exportPreviewCount").innerHTML =
+    filtered.length === 0
+      ? `<span style="color:var(--danger);">No users match this filter.</span>`
+      : `<b style="color:var(--text);font-size:15px;">${filtered.length}</b> user${filtered.length!==1?"s":""} selected &nbsp;·&nbsp;
+         <span style="color:var(--success);">✅ ${paid}</span> &nbsp;
+         <span style="color:var(--warning);">⚠️ ${partial}</span> &nbsp;
+         <span style="color:var(--danger);">⛔ ${unpaid}</span><br>
+         <span style="font-size:12px;margin-top:4px;display:block;">
+           Billed <b style="color:var(--text);">${fmt(totals.bill)}</b> &nbsp;·&nbsp;
+           Collected <b style="color:var(--success);">${fmt(totals.paid)}</b> &nbsp;·&nbsp;
+           Due <b style="color:var(--danger);">${fmt(totals.due)}</b>
+         </span>`;
+}
+
+function closeExportModal(e){
+  if(e.target===document.getElementById("exportModal")) closeExportModalDirect();
+}
+function closeExportModalDirect(){
+  document.getElementById("exportModal").classList.remove("open");
+}
+
+function exportSuffix(){
+  const c = document.getElementById("exportCollector")?.value||"";
+  const a = document.getElementById("exportArea")?.value||"";
+  const s = document.getElementById("exportStatus")?.value||"";
+  return [c,a,s].filter(Boolean).join("_").replace(/\s+/g,"_")||"";
+}
+
+async function exportUsersExcel(){
+  const filtered = getExportFiltered();
+  if(filtered.length===0){showToast("⚠️ No users to export");return;}
+
+  if(!window.XLSX){
+    showToast("⏳ Loading export tools…");
+    try{ await loadXLSX(); }catch{ showToast("⚠️ Failed to load Excel export tools"); return; }
+  }
+
+  const rows = filtered.map(u=>({
+    "User ID": u.id,
+    "Name": u.name,
+    "Area": u.area,
+    "Collector": u.collector||"Unassigned",
+    "Package": u.pkg,
+    "Monthly Bill": u.bill,
+    "Amount Paid": u.paid,
+    "Balance Due": u.balance,
+    "Status": u.status,
+    "Payment Date": u.date||""
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [{wch:8},{wch:22},{wch:14},{wch:14},{wch:10},{wch:12},{wch:12},{wch:12},{wch:10},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Users");
+  XLSX.writeFile(wb, exportFileBase(exportSuffix())+".xlsx");
+  closeExportModalDirect();
+  showToast(`✅ Exported ${filtered.length} users to Excel`);
+}
+
+async function exportUsersPDF(){
+  const filtered = getExportFiltered();
+  if(filtered.length===0){showToast("⚠️ No users to export");return;}
+
+  if(!window.jspdf?.jsPDF?.API?.autoTable){
+    showToast("⏳ Loading export tools…");
+    try{ await loadPDFLibs(); }catch{ showToast("⚠️ Failed to load PDF export tools"); return; }
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  const PW = doc.internal.pageSize.getWidth();   // 210
+  const PH = doc.internal.pageSize.getHeight();  // 297
+
+  // ── GRAYSCALE PALETTE (no colour, print/photocopy friendly) ──────
+  const C = {
+    purple:    [75, 75, 75],      // header bar / "Total Billed" accent
+    gold:      [150, 150, 150],   // accent strip (mid gray)
+    dark:      [25, 25, 25],
+    mid:       [90, 90, 90],
+    light:     [240, 240, 240],
+    white:     [255, 255, 255],
+    green:     [55, 55, 55],      // "Collected" / positive values — dark gray, bold
+    orange:    [115, 115, 115],   // "Partial" values — mid gray
+    red:       [20, 20, 20],      // "Outstanding/Due/Unpaid" — near-black, bold
+    border:    [205, 205, 205],
+    text:      [35, 35, 35],
+    textDim:   [130, 130, 130],
+    rowAlt:    [246, 246, 246],
+    headerBg:  [55, 55, 55],
+  };
+
+  // ── HELPERS ─────────────────────────────────────────────────────
+  // Use plain "Tk" instead of the Bengali "৳" symbol — jsPDF can't render it
+  const fmtPDF  = n => "Tk " + Number(n).toLocaleString("en-US");
+  const fmtNum  = n => Number(n).toLocaleString("en-US");
+
+  // ── PAGE SETUP: draw header + footer on every page ───────────────
+  function drawPageChrome(pageNum, totalPages){
+    // Top gradient bar (simulated with two rects)
+    doc.setFillColor(...C.purple);
+    doc.rect(0, 0, PW, 18, "F");
+    doc.setFillColor(...C.gold);
+    doc.rect(0, 17, PW, 2.5, "F");
+
+    // Company name
+    doc.setTextColor(...C.white);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(settings.company || "ISP Bill Report", 14, 12);
+
+    // Month + report label
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${settings.month} ${settings.year}  |  Bill Collection Report`, PW - 14, 12, { align:"right" });
+
+    // Bottom footer line
+    doc.setDrawColor(...C.border);
+    doc.setLineWidth(0.3);
+    doc.line(14, PH - 10, PW - 14, PH - 10);
+    doc.setTextColor(...C.textDim);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      `${settings.company}  ·  ${settings.month} ${settings.year}  ·  Generated: ${new Date().toLocaleDateString("en-GB")}`,
+      14, PH - 6
+    );
+    doc.text(`Page ${pageNum} of ${totalPages}`, PW - 14, PH - 6, { align:"right" });
+  }
+
+  // ── FIRST PAGE: draw chrome ──────────────────────────────────────
+  drawPageChrome(1, 1); // placeholder — we'll overwrite page numbers at the end
+
+  // ── FILTER + RECORD COUNT ROW ────────────────────────────────────
+  const collectorVal = document.getElementById("exportCollector")?.value || "";
+  const areaVal      = document.getElementById("exportArea")?.value || "";
+  const statusVal    = document.getElementById("exportStatus")?.value || "";
+  const filterParts  = [];
+  if(collectorVal) filterParts.push(`Collector: ${collectorVal}`);
+  if(areaVal)      filterParts.push(`Area: ${areaVal}`);
+  if(statusVal)    filterParts.push(`Status: ${statusVal}`);
+  const filterLabel = filterParts.length ? filterParts.join("   |   ") : "All Users";
+
+  doc.setTextColor(...C.textDim);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "italic");
+  doc.text(`Filter: ${filterLabel}`, 14, 26);
+  doc.setFont("helvetica", "normal");
+  doc.text(`${filtered.length} record${filtered.length !== 1 ? "s" : ""}`, PW - 14, 26, { align:"right" });
+
+  // ── SUMMARY KPI BOXES ────────────────────────────────────────────
+  const totals  = filtered.reduce((a,u) => ({ bill:a.bill+u.bill, paid:a.paid+u.paid, due:a.due+u.balance }), { bill:0, paid:0, due:0 });
+  const paidCnt = filtered.filter(u => u.status === "PAID").length;
+  const partCnt = filtered.filter(u => u.status === "PARTIAL").length;
+  const unpCnt  = filtered.filter(u => u.status === "UNPAID").length;
+  const collPct = totals.bill > 0 ? Math.round((totals.paid / totals.bill) * 100) : 0;
+  const pctColor = collPct >= 80 ? C.green : collPct >= 50 ? C.orange : C.red;
+
+  const kpis = [
+    { label:"Total Billed",    value: fmtPDF(totals.bill), sub: `${filtered.length} users`,       accent: C.purple },
+    { label:"Collected",       value: fmtPDF(totals.paid), sub: `Paid: ${paidCnt}`,               accent: C.green  },
+    { label:"Outstanding",     value: fmtPDF(totals.due),  sub: `Partial: ${partCnt}`,            accent: C.red    },
+    { label:"Collection Rate", value: `${collPct}%`,       sub: `Unpaid: ${unpCnt}`,              accent: pctColor },
+  ];
+
+  const kpiY   = 30;
+  const kpiH   = 18;
+  const kpiGap = 4;
+  const kpiW   = (PW - 28 - kpiGap * (kpis.length - 1)) / kpis.length;
+
+  kpis.forEach((k, i) => {
+    const x = 14 + i * (kpiW + kpiGap);
+    // Card background
+    doc.setFillColor(...C.white);
+    doc.setDrawColor(...C.border);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(x, kpiY, kpiW, kpiH, 2, 2, "FD");
+    // Left accent bar
+    doc.setFillColor(...k.accent);
+    doc.roundedRect(x, kpiY, 2.5, kpiH, 1, 1, "F");
+    // Value
+    doc.setTextColor(...C.text);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(k.value, x + kpiW / 2, kpiY + 8, { align:"center" });
+    // Label
+    doc.setTextColor(...C.textDim);
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.text(k.label.toUpperCase(), x + kpiW / 2, kpiY + 13, { align:"center" });
+    // Sub
+    doc.setFontSize(6);
+    doc.setFont("helvetica", "normal");
+    doc.text(k.sub, x + kpiW / 2, kpiY + 16.5, { align:"center" });
+  });
+
+  // ── STATUS LEGEND (small pill row) ──────────────────────────────
+  const legendY = kpiY + kpiH + 3;
+  const legend  = [
+    { label:`PAID: ${paidCnt}`,    color: C.green  },
+    { label:`PARTIAL: ${partCnt}`, color: C.orange },
+    { label:`UNPAID: ${unpCnt}`,   color: C.red    },
+  ];
+  let lx = PW - 14;
+  [...legend].reverse().forEach(l => {
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    const tw = doc.getTextWidth(l.label) + 8;
+    lx -= tw;
+    doc.setFillColor(...l.color.map(c => Math.min(255, c + 170)));
+    doc.roundedRect(lx, legendY, tw, 5, 1, 1, "F");
+    doc.setTextColor(...l.color);
+    doc.text(l.label, lx + tw / 2, legendY + 3.5, { align:"center" });
+    lx -= 3;
+  });
+
+  // ── TABLE ────────────────────────────────────────────────────────
+  const tableStartY = legendY + 8;
+
+  const body = filtered.map((u, idx) => [
+    idx + 1,
+    u.id,
+    u.name,
+    u.area || "-",
+    u.collector || "Unassigned",
+    u.pkg,
+    fmtPDF(u.bill),
+    fmtPDF(u.paid),
+    fmtPDF(u.balance),
+    u.status,
+  ]);
+
+  // Column definitions — widths sum exactly to PW - 28 = 182 (portrait A4).
+  // Amount columns are prefixed with "Tk" so figures are never
+  // clipped/ellipsized and stay clearly legible.
+  const cols = [
+    { header:"#",             width:5,  align:"center" },
+    { header:"ID",            width:7,  align:"center" },
+    { header:"Customer Name", width:34, align:"left"   },
+    { header:"Area",          width:18, align:"left"   },
+    { header:"Collector",     width:20, align:"left"   },
+    { header:"Package",       width:15, align:"left"   },
+    { header:"Bill",          width:23, align:"right"  },
+    { header:"Paid",          width:23, align:"right"  },
+    { header:"Due",           width:24, align:"right"  },
+    { header:"Status",        width:13, align:"center" },
+  ];
+
+  doc.autoTable({
+    head: [ cols.map(c => c.header) ],
+    body,
+    startY: tableStartY,
+    margin: { left:14, right:14 },
+    tableWidth: PW - 28,
+    styles: {
+      fontSize: 6.5,
+      cellPadding: { top:2, bottom:2, left:1.5, right:1.5 },
+      textColor: C.text,
+      font: "helvetica",
+      lineColor: C.border,
+      lineWidth: 0.2,
+      overflow: "ellipsize",
+    },
+    headStyles: {
+      fillColor: C.headerBg,
+      textColor: C.white,
+      fontStyle: "bold",
+      fontSize: 6,
+      cellPadding: { top:2.5, bottom:2.5, left:1.5, right:1.5 },
+      halign: "center",
+    },
+    alternateRowStyles: {
+      fillColor: C.rowAlt,
+    },
+    bodyStyles: {
+      fillColor: C.white,
+    },
+    columnStyles: cols.reduce((acc, c, i) => {
+      acc[i] = { cellWidth: c.width, halign: c.align };
+      return acc;
+    }, {}),
+
+    didParseCell: function(data) {
+      if(data.section !== "body") return;
+
+      // Status column — distinguished by weight/style + subtle fill (no colour)
+      if(data.column.index === 9) {
+        const v = data.cell.raw;
+        if(v === "PAID")    { data.cell.styles.textColor = C.text;  data.cell.styles.fontStyle = "bold"; }
+        if(v === "PARTIAL") { data.cell.styles.textColor = C.orange; data.cell.styles.fontStyle = "italic"; }
+        if(v === "UNPAID")  { data.cell.styles.textColor = C.dark;  data.cell.styles.fontStyle = "bold"; data.cell.styles.fillColor = C.light; }
+      }
+
+      // Due column — bold + light highlight if amount outstanding
+      if(data.column.index === 8) {
+        const raw = String(data.cell.raw).replace(/[^0-9.-]/g, "");
+        if(Number(raw) > 0) {
+          data.cell.styles.textColor = C.dark;
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = C.light;
+        }
+      }
+
+      // Paid column — bold if any amount collected
+      if(data.column.index === 7) {
+        const raw = String(data.cell.raw).replace(/[^0-9.-]/g, "");
+        if(Number(raw) > 0) {
+          data.cell.styles.textColor = C.text;
+          data.cell.styles.fontStyle = "bold";
+        }
+      }
+
+      // Promise column — italic if a date is set
+      if(data.column.index === 11 && data.cell.raw !== "-") {
+        data.cell.styles.textColor = C.orange;
+        data.cell.styles.fontStyle = "italic";
+      }
+
+      // Amount columns (Bill, Paid, Due) — monospace-style numeric alignment
+      if([6,7,8].includes(data.column.index)) {
+        data.cell.styles.font = "helvetica";
+      }
+    },
+
+    // Draw subtotal footer row inside the table
+    didDrawPage: function(data) {
+      const pageCount = doc.internal.getNumberOfPages();
+      const pg = doc.internal.getCurrentPageInfo().pageNumber;
+
+      // Re-draw chrome on every page (page 1 already drawn)
+      if(pg > 1) drawPageChrome(pg, pageCount);
+    },
+  });
+
+  // ── TOTALS FOOTER BAR ────────────────────────────────────────────
+  const finalY = doc.lastAutoTable.finalY + 3;
+  const footerH = 11;
+
+  if(finalY + footerH < PH - 14) {
+    doc.setFillColor(...C.headerBg);
+    doc.roundedRect(14, finalY, PW - 28, footerH, 2, 2, "F");
+
+    // Totals label
+    doc.setTextColor(...C.white);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTALS", 18, finalY + 7);
+
+    // Calculate X positions matching columns 6,7,8
+    let cx = 14;
+    cols.forEach((c, i) => {
+      if(i === 6){
+        doc.setTextColor(...C.white);
+        doc.setFont("helvetica", "bold");
+        doc.text(fmtPDF(totals.bill), cx + c.width - 2, finalY + 7, { align:"right" });
+      }
+      if(i === 7){
+        doc.setTextColor(...C.white);
+        doc.setFont("helvetica", "bold");
+        doc.text(fmtPDF(totals.paid), cx + c.width - 2, finalY + 7, { align:"right" });
+      }
+      if(i === 8){
+        doc.setTextColor(...C.white);
+        doc.setFont("helvetica", "bold");
+        doc.text(fmtPDF(totals.due), cx + c.width - 2, finalY + 7, { align:"right" });
+      }
+      cx += c.width;
+    });
+  }
+
+  // ── FIX PAGE NUMBERS (now we know total pages) ───────────────────
+  const totalPages = doc.internal.getNumberOfPages();
+  for(let p = 1; p <= totalPages; p++){
+    doc.setPage(p);
+    // Overwrite old footer with correct total
+    doc.setFillColor(...C.white);
+    doc.rect(PW - 40, PH - 11, 40, 8, "F");
+    doc.setTextColor(...C.textDim);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Page ${p} of ${totalPages}`, PW - 14, PH - 6, { align:"right" });
+  }
+
+  doc.save(exportFileBase(exportSuffix()) + ".pdf");
+  closeExportModalDirect();
+  showToast(`✅ Exported ${filtered.length} users to PDF`);
+}
+
+function setUserFilter(status){
+  userFilter.promise = false;
+  userFilter.status = (userFilter.status===status && !status) ? null : status;
+  userPage = 1;
+  renderUsers();
+}
+
+// ── BULK MODE ────────────────────────────────────────────────────
+function toggleBulkMode(){
+  bulkMode = !bulkMode;
+  bulkSelected.clear();
+  const btn = document.getElementById("bulkModeBtn");
+  const bar = document.getElementById("bulkBar");
+  if(bulkMode){
+    btn.textContent = "✕ Cancel";
+    btn.style.background = "var(--danger-soft)";
+    btn.style.color = "var(--danger)";
+    btn.style.border = "1px solid rgba(240,99,92,.25)";
+    bar.style.display = "flex";
+  } else {
+    btn.textContent = "☑️ Bulk Pay";
+    btn.style.background = "";
+    btn.style.color = "";
+    btn.style.border = "";
+    bar.style.display = "none";
+  }
+  renderUsers();
+}
+
+function toggleBulkSelect(id){
+  if(bulkSelected.has(id)) bulkSelected.delete(id);
+  else bulkSelected.add(id);
+  updateBulkBar();
+  renderUsers();
+}
+
+function bulkSelectAll(){
+  const {filtered} = getFilteredUsers();
+  filtered.forEach(u=>bulkSelected.add(u.id));
+  updateBulkBar();
+  renderUsers();
+}
+
+function bulkDeselectAll(){
+  bulkSelected.clear();
+  updateBulkBar();
+  renderUsers();
+}
+
+function updateBulkBar(){
+  const n = bulkSelected.size;
+  document.getElementById("bulkCount").textContent = n === 0 ? "0 selected" : `${n} user${n!==1?"s":""} selected`;
+  const payBtn = document.getElementById("bulkPayBtn");
+  payBtn.style.opacity = n > 0 ? "1" : ".4";
+  payBtn.style.pointerEvents = n > 0 ? "auto" : "none";
+}
+
+function openBulkPayModal(){
+  if(bulkSelected.size === 0) return;
+  // Set default date to today
+  document.getElementById("bulkPayDate").value = new Date().toISOString().slice(0,10);
+  document.getElementById("bulkAmountType").value = "full";
+  document.getElementById("bulkCustomAmountField").style.display = "none";
+  document.getElementById("bulkCustomAmount").value = "";
+  // Populate collector dropdown
+  const collectors = [...new Set(users.map(u=>u.collector||""))].filter(Boolean).sort();
+  const sel = document.getElementById("bulkCollector");
+  sel.innerHTML = `<option value="">— Keep existing collector —</option>` +
+    collectors.map(c=>`<option value="${c}">${c}</option>`).join("");
+  updateBulkPayPreview();
+  document.getElementById("bulkAmountType").onchange = updateBulkPayPreview;
+  document.getElementById("bulkCustomAmount").oninput = updateBulkPayPreview;
+  document.getElementById("bulkPayModal").classList.add("open");
+}
+
+function onBulkAmountTypeChange(){
+  const isCustom = document.getElementById("bulkAmountType").value === "custom";
+  document.getElementById("bulkCustomAmountField").style.display = isCustom ? "block" : "none";
+  updateBulkPayPreview();
+}
+
+function updateBulkPayPreview(){
+  const type = document.getElementById("bulkAmountType").value;
+  const custom = Number(document.getElementById("bulkCustomAmount").value)||0;
+  const selectedUsers = users
+    .filter(u=>bulkSelected.has(u.id))
+    .map(u=>({...u, bill:getBill(u.pkg,u.customBill)}));
+
+  const totalAmount = selectedUsers.reduce((sum,u)=> sum + (type==="full" ? u.bill : custom), 0);
+  const alreadyPaid = selectedUsers.filter(u=>u.status==="PAID"||getStatus(u.bill,u.paid)==="PAID").length;
+
+  document.getElementById("bulkPaySub").textContent =
+    `Updating ${bulkSelected.size} user${bulkSelected.size!==1?"s":""}`;
+
+  document.getElementById("bulkPayPreview").innerHTML =
+    `<b style="color:var(--text);font-size:15px;">${fmt(totalAmount)}</b> total payment<br>
+    <span style="font-size:12px;display:block;margin-top:4px;">
+      ${type==="full"
+        ? `Each user will be marked as full bill paid`
+        : custom > 0 ? `৳${custom.toLocaleString()} applied to each user` : `<span style="color:var(--warning);">Enter a custom amount above</span>`}
+      ${alreadyPaid > 0 ? `<br><span style="color:var(--warning);">⚠️ ${alreadyPaid} user${alreadyPaid!==1?"s":""} already fully paid — will be overwritten</span>` : ""}
+    </span>`;
+}
+
+function confirmBulkPay(){
+  const type      = document.getElementById("bulkAmountType").value;
+  const custom    = Number(document.getElementById("bulkCustomAmount").value)||0;
+  const date      = document.getElementById("bulkPayDate").value||"";
+  const collector = document.getElementById("bulkCollector").value;
+
+  if(type==="custom" && custom <= 0){showToast("⚠️ Enter a valid amount");return;}
+
+  let updatedCount = 0;
+  users = users.map(u=>{
+    if(!bulkSelected.has(u.id)) return u;
+    const bill = getBill(u.pkg, u.customBill);
+    const paid = type==="full" ? bill : custom;
+    updatedCount++;
+    // Auto-clear promise if now fully paid
+    const clearedPromise = paid >= bill ? {promiseDate:undefined, promiseNote:undefined} : {};
+    const collectorUpdate = collector ? {collector} : {};
+    return {...u, paid, date, ...clearedPromise, ...collectorUpdate};
+  });
+
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(), users);
+  closeBulkPayModalDirect();
+  toggleBulkMode(); // exit bulk mode
+  showToast(`✅ ${updatedCount} user${updatedCount!==1?"s":""} updated!`);
+  renderDashboard();
+}
+
+function closeBulkPayModal(e){
+  if(e.target===document.getElementById("bulkPayModal")) closeBulkPayModalDirect();
+}
+function closeBulkPayModalDirect(){
+  document.getElementById("bulkPayModal").classList.remove("open");
+}
+
+// ── ADD / EDIT FORM ──────────────────────────────────────────────
+function setupAddForm(){
+  editId=null;
+  document.getElementById("formTitle").textContent="➕ Add New User";
+  document.getElementById("fUserId").value="";
+  document.getElementById("fName").value="";
+  document.getElementById("fArea").value="";
+  document.getElementById("fPaid").value="";
+  document.getElementById("fDate").value="";
+  document.getElementById("fCustomBill").value="";
+  document.getElementById("fSubmitBtn").textContent="✅ Add User";
+  document.getElementById("fCancelBtn").style.display="none";
+  populateCollectorSelect();
+  populatePkgSelect();
+}
+
+function startEdit(id){
+  const u=users.find(x=>x.id===id); if(!u) return;
+  editId=id;
+  switchTab(2);
+  document.getElementById("formTitle").textContent="✏️ Edit User #"+id;
+  document.getElementById("fUserId").value=u.id;
+  document.getElementById("fName").value=u.name;
+  document.getElementById("fArea").value=u.area;
+  document.getElementById("fPaid").value=u.paid;
+  document.getElementById("fDate").value=u.date||"";
+  document.getElementById("fCustomBill").value=u.customBill !== undefined ? u.customBill : "";
+  document.getElementById("fSubmitBtn").textContent="💾 Save Changes";
+  document.getElementById("fCancelBtn").style.display="block";
+  populateCollectorSelect(u.collector);
+  populatePkgSelect(u.pkg);
+}
+
+function populateCollectorSelect(selected){
+  const sel=document.getElementById("fCollector");
+  const isUnassigned = selected==="";
+  const unassigned=`<option value=""${isUnassigned?" selected":""}>— Unassigned —</option>`;
+  sel.innerHTML=unassigned+settings.collectors.map((c,i)=>`<option value="${c}"${(c===selected)||(selected===undefined&&i===0)?" selected":""}>${c}</option>`).join("");
+}
+
+function populatePkgSelect(selected){
+  const sel=document.getElementById("fPkg");
+  sel.innerHTML=PACKAGES.map(p=>`<option value="${p.mbps}"${p.mbps===selected?" selected":""}>${p.mbps}</option>`).join("");
+  updateBillPreview();
+  sel.onchange=updateBillPreview;
+  document.getElementById("fCustomBill").oninput=updateBillPreview;
+}
+
+function updateBillPreview(){
+  const pkg=document.getElementById("fPkg").value;
+  const custom=document.getElementById("fCustomBill").value;
+  const bill = custom ? Number(custom) : getPkgDefaultBill(pkg);
+  document.getElementById("fBillPreview").textContent=fmt(bill);
+  document.getElementById("fBillPreview").style.color = custom ? "var(--warning)" : "var(--accent-2)";
+  const hint = document.getElementById("fBillHint");
+  if(hint) hint.textContent = custom ? `⚡ Custom override active (default: ${fmt(getPkgDefaultBill(pkg))})` : "";
+}
+
+function handleFormSubmit(){
+  const name=document.getElementById("fName").value.trim();
+  if(!name){showToast("⚠️ Name is required");return;}
+  const u={
+    name,
+    area:document.getElementById("fArea").value.trim()||"—",
+    collector:document.getElementById("fCollector").value,
+    pkg:document.getElementById("fPkg").value,
+    paid:Number(document.getElementById("fPaid").value)||0,
+    date:document.getElementById("fDate").value||""
+  };
+  const customBillVal=document.getElementById("fCustomBill").value;
+  if(customBillVal !== "") u.customBill = Number(customBillVal);
+  if(editId!==null){
+    // Allow changing the ID during edit if a new one is entered
+    const customId=parseInt(document.getElementById("fUserId").value)||null;
+    if(customId && customId!==editId && users.find(x=>x.id===customId)){
+      showToast("⚠️ User ID "+customId+" already in use");return;
+    }
+    const newId=customId||editId;
+    // Auto-clear promise if now fully paid
+    const existingUser = users.find(x=>x.id===editId)||{};
+    const bill = getBill(u.pkg||existingUser.pkg, u.customBill??existingUser.customBill);
+    if(u.paid >= bill){ u.promiseDate=undefined; u.promiseNote=undefined; }
+    else { u.promiseDate=existingUser.promiseDate; u.promiseNote=existingUser.promiseNote; }
+    users=users.map(x=>x.id===editId?{...x,...u,id:newId}:x);
+    showToast("✅ Saved!"); editId=null;
+  } else {
+    const customId=parseInt(document.getElementById("fUserId").value)||null;
+    if(customId && users.find(x=>x.id===customId)){
+      showToast("⚠️ User ID "+customId+" already in use");return;
+    }
+    const nextId=customId||(users.length?Math.max(...users.map(x=>x.id))+1:1);
+    users.push({id:nextId,...u});
+    showToast("✅ User added! ID: #"+nextId);
+  }
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(),users);
+  switchTab(1);
+}
+
+function cancelEdit(){
+  editId=null; setupAddForm(); switchTab(1);
+}
+
+function deleteUser(id){
+  if(!confirm("Delete this user?")) return;
+  users=users.filter(u=>u.id!==id);
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(),users);
+  renderUsers();
+  showToast("Deleted");
+}
+
+// ── SEARCH ───────────────────────────────────────────────────────
+function doSearch(){
+  const q=document.getElementById("searchInput").value.trim();
+  const el=document.getElementById("searchResult");
+  if(!q){el.innerHTML="";return;}
+  const u=users.find(x=>String(x.id)===q);
+  if(!u){el.innerHTML='<div style="color:var(--danger);font-weight:600;">No user found with ID '+q+'</div>';return;}
+  const bill=getBill(u.pkg,u.customBill),balance=bill-u.paid,status=getStatus(bill,u.paid);
+  const pill=status==="PAID"?"pill-PAID":status==="PARTIAL"?"pill-PARTIAL":"pill-UNPAID";
+  const label=status==="PAID"?"✅ PAID":status==="PARTIAL"?"⚠️ PARTIAL":"⛔ UNPAID";
+  el.innerHTML=`
+    <div class="search-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+        <div style="font-weight:800;font-size:17px;">#${u.id} ${u.name}</div>
+        <span class="pill ${pill}">${label}</span>
+      </div>
+      <div class="search-row"><span class="search-key">Area</span><span style="font-weight:600;">${u.area}</span></div>
+      <div class="search-row"><span class="search-key">Collector</span><span style="font-weight:600;">${u.collector}</span></div>
+      <div class="search-row"><span class="search-key">Package</span><span style="font-weight:600;">${u.pkg}</span></div>
+      <div class="search-row"><span class="search-key">Monthly Bill</span><span style="font-weight:600;">${fmt(bill)}</span></div>
+      <div class="search-row"><span class="search-key">Amount Paid</span><span style="font-weight:600;color:var(--success);">${fmt(u.paid)}</span></div>
+      <div class="search-row"><span class="search-key">Balance Due</span><span style="font-weight:600;color:var(--danger);">${fmt(balance)}</span></div>
+      ${u.date?`<div class="search-row"><span class="search-key">Payment Date</span><span style="font-weight:600;">${u.date}</span></div>`:""}
+      <div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="startEdit(${u.id})">✏️ Edit this user</button></div>
+    </div>`;
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────────
+function setupSettings(){
+  document.getElementById("sCompany").value=settings.company;
+  // months
+  const ms=document.getElementById("sMonth");
+  ms.innerHTML=MONTHS.map(m=>`<option${m===settings.month?" selected":""}>${m}</option>`).join("");
+  // years
+  const ys=document.getElementById("sYear");
+  ys.innerHTML=YEARS.map(y=>`<option${String(y)===settings.year?" selected":""}>${y}</option>`).join("");
+  renderCollectorList();
+  renderPackageBillList();
+  updateSettingsPreview();
+  document.getElementById("sCompany").oninput=updateSettingsPreview;
+  ms.onchange=updateSettingsPreview;
+  ys.onchange=updateSettingsPreview;
+}
+
+function renderPackageBillList(){
+  document.getElementById("packageBillList").innerHTML = PACKAGES.map(p=>{
+    const override = packageBills[p.mbps];
+    const current = override !== undefined ? override : p.bill;
+    return `
+    <div class="col-row" style="align-items:center;gap:8px;padding:8px 0;">
+      <span class="col-name" style="font-size:13px;min-width:80px;">${p.mbps}</span>
+      <span style="font-size:11px;color:var(--text-dim);flex:0 0 auto;">৳</span>
+      <input type="number" class="col-input" style="flex:1;max-width:110px;" id="pbill-${p.mbps.replace(/\s/g,'_')}"
+        value="${current}" placeholder="${p.bill}"
+        oninput="previewPackageBill('${p.mbps}')"
+        onchange="savePackageBill('${p.mbps}')"/>
+      ${override !== undefined ? `<button class="icon-btn" title="Reset to default" onclick="resetPackageBill('${p.mbps}')" style="font-size:11px;padding:4px 8px;color:var(--warning);">↺</button>` : `<span style="min-width:36px;"></span>`}
+      <span style="font-size:11px;color:var(--text-dim);min-width:60px;">${override!==undefined?`<span style="color:var(--warning);">custom</span>`:`default`}</span>
+    </div>`;
+  }).join("");
+}
+
+function previewPackageBill(pkg){
+  // live update the badge
+  renderPackageBillList();
+  // re-focus the input
+  const id="pbill-"+pkg.replace(/\s/g,'_');
+  const el=document.getElementById(id);
+  if(el){el.focus();const len=el.value.length;el.setSelectionRange(len,len);}
+}
+
+function savePackageBill(pkg){
+  const id="pbill-"+pkg.replace(/\s/g,'_');
+  const el=document.getElementById(id);
+  if(!el) return;
+  const val=Number(el.value);
+  const def=(PACKAGES.find(p=>p.mbps===pkg)||{bill:0}).bill;
+  if(!el.value || isNaN(val) || val<0){
+    showToast("⚠️ Enter a valid amount");return;
+  }
+  if(val===def){
+    delete packageBills[pkg];
+  } else {
+    packageBills[pkg]=val;
+  }
+  cloudSave("isp_pkg_bills_v1", packageBills);
+  renderPackageBillList();
+  showToast(`✅ ${pkg} bill set to ৳${val.toLocaleString()}`);
+}
+
+function resetPackageBill(pkg){
+  delete packageBills[pkg];
+  cloudSave("isp_pkg_bills_v1", packageBills);
+  renderPackageBillList();
+  const def=(PACKAGES.find(p=>p.mbps===pkg)||{bill:0}).bill;
+  showToast(`↺ ${pkg} reset to default ৳${def.toLocaleString()}`);
+}
+
+function updateSettingsPreview(){
+  const c=document.getElementById("sCompany").value||"—";
+  const m=document.getElementById("sMonth").value;
+  const y=document.getElementById("sYear").value;
+  document.getElementById("settingsPreview").innerHTML=`Preview: <b style="color:var(--text);">${c}</b> · <b style="color:var(--text);">${m} ${y}</b>`;
+}
+
+function renderCollectorList(){
+  document.getElementById("collectorList").innerHTML=settings.collectors.map((c,i)=>`
+    <div class="col-row" id="crow-${i}">
+      <span class="col-name" id="cname-${i}">${c}</span>
+      <button class="icon-btn" onclick="editCollector(${i})">✏️</button>
+      <button class="icon-btn icon-btn-red" onclick="removeCollector(${i})">✕</button>
+    </div>`).join("");
+}
+
+function editCollector(i){
+  const row=document.getElementById("crow-"+i);
+  const nameSpan=document.getElementById("cname-"+i);
+  const current=settings.collectors[i];
+  row.innerHTML=`
+    <input class="col-input" id="cedit-${i}" value="${current}" onkeydown="if(event.key==='Enter')saveCollector(${i});if(event.key==='Escape')renderCollectorList();"/>
+    <button class="icon-btn" onclick="saveCollector(${i})" style="color:var(--success);">✓</button>
+    <button class="icon-btn" onclick="renderCollectorList()">✕</button>`;
+  document.getElementById("cedit-"+i).focus();
+}
+
+function saveCollector(i){
+  const val=document.getElementById("cedit-"+i).value.trim();
+  if(!val){showToast("⚠️ Name cannot be empty");return;}
+  const oldName=settings.collectors[i];
+  settings.collectors[i]=val;
+  // update users with old name
+  users=users.map(u=>u.collector===oldName?{...u,collector:val}:u);
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(),users);
+  renderCollectorList();
+  showToast("✅ Renamed!");
+}
+
+function removeCollector(i){
+  if(settings.collectors.length<=1){showToast("⚠️ Need at least one collector");return;}
+  settings.collectors.splice(i,1);
+  renderCollectorList();
+}
+
+function addCollector(){
+  const inp=document.getElementById("newColInput");
+  const name=inp.value.trim();
+  if(!name){showToast("⚠️ Enter a name");return;}
+  if(settings.collectors.includes(name)){showToast("⚠️ Already exists");return;}
+  settings.collectors.push(name);
+  inp.value="";
+  renderCollectorList();
+  showToast("✅ Added!");
+}
+
+function saveSettings(){
+  const company=document.getElementById("sCompany").value.trim();
+  if(!company){showToast("⚠️ Company name required");return;}
+  if(settings.collectors.length===0){showToast("⚠️ Add at least one collector");return;}
+  const newMonth=document.getElementById("sMonth").value;
+  const newYear=document.getElementById("sYear").value;
+  const monthChanged = newMonth!==settings.month || newYear!==settings.year;
+  if(monthChanged){
+    // Save users under old month key before switching
+    invalidateEnrichedCache(); cloudSave(currentMonthKey(), users);
+  }
+  settings.company=company;
+  settings.month=newMonth;
+  settings.year=newYear;
+  cloudSave("isp_settings_v1",settings);
+  if(monthChanged){
+    // Load users for new month
+    users=load(currentMonthKey(),[]);
+    showToast(`✅ Settings saved! Switched to ${settings.month} ${settings.year}`);
+  } else {
+    showToast("✅ Settings saved!");
+  }
+  updateMonthHeader();
+  updateCompanyHeader();
+  if(currentTab===0) renderDashboard();
+  if(currentTab===1) renderUsers();
+}
+
+function resetData(){
+  if(!confirm("Reset ALL user data for "+settings.month+" "+settings.year+"? This cannot be undone.")) return;
+  users=[...SEED_USERS];
+  packageBills={};
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(),users);
+  cloudSave("isp_pkg_bills_v1",packageBills);
+  updateMonthHeader();
+  showToast("Data reset for "+settings.month+" "+settings.year);
+}
+
+// ── WHATSAPP DUE LIST ────────────────────────────────────────────
+function openWhatsAppModal(){
+  // Populate collector dropdown — include "All Collectors" option
+  const collectors = [...new Set(users.map(u=>u.collector||"").filter(Boolean))].sort();
+  const sel = document.getElementById("waCollector");
+  sel.innerHTML = `<option value="">👥 All Collectors</option>` +
+    collectors.map(c=>`<option value="${c}">${c}</option>`).join("");
+
+  // Populate area dropdown — include "All Areas" option
+  const areas = [...new Set(users.map(u=>u.area||"").filter(Boolean))].sort();
+  const areaSel = document.getElementById("waArea");
+  areaSel.innerHTML = `<option value="">📍 All Areas</option>` +
+    areas.map(a=>`<option value="${a}">${a}</option>`).join("");
+
+  // Default checkboxes
+  document.getElementById("waIncUnpaid").checked  = true;
+  document.getElementById("waIncPartial").checked = true;
+  document.getElementById("waIncPaid").checked    = false;
+
+  renderWAPreview();
+  document.getElementById("whatsappModal").classList.add("open");
+}
+
+function closeWhatsAppModal(e){
+  if(e.target===document.getElementById("whatsappModal")) closeWhatsAppModalDirect();
+}
+function closeWhatsAppModalDirect(){
+  document.getElementById("whatsappModal").classList.remove("open");
+}
+
+function buildWAText(){
+  const collector  = document.getElementById("waCollector").value;
+  const area       = document.getElementById("waArea").value;
+  const incUnpaid  = document.getElementById("waIncUnpaid").checked;
+  const incPartial = document.getElementById("waIncPartial").checked;
+  const incPaid    = document.getElementById("waIncPaid").checked;
+
+  const enriched = users.map(u=>{
+    const bill = getBill(u.pkg, u.customBill);
+    return {...u, bill, balance: bill - u.paid, status: getStatus(bill, u.paid)};
+  });
+
+  // Filter by collector, area & status
+  const filtered = enriched.filter(u=>{
+    if(collector && (u.collector||"") !== collector) return false;
+    if(area && (u.area||"") !== area) return false;
+    if(u.status === "UNPAID"  && !incUnpaid)  return false;
+    if(u.status === "PARTIAL" && !incPartial) return false;
+    if(u.status === "PAID"    && !incPaid)    return false;
+    return true;
+  });
+
+  if(filtered.length === 0) return null;
+
+  // Totals
+  const totalBill = filtered.reduce((a,u)=>a+u.bill,0);
+  const totalPaid = filtered.reduce((a,u)=>a+u.paid,0);
+  const totalDue  = filtered.reduce((a,u)=>a+u.balance,0);
+  const paidCount    = filtered.filter(u=>u.status==="PAID").length;
+  const partialCount = filtered.filter(u=>u.status==="PARTIAL").length;
+  const unpaidCount  = filtered.filter(u=>u.status==="UNPAID").length;
+
+  const collectorLabel = collector || "All Collectors";
+  const areaLabel = area || "";
+  const statusIcons = { PAID:"✅", PARTIAL:"⚠️", UNPAID:"⛔" };
+
+  // Header
+  let msg = "";
+  msg += `🌐 *${settings.company}*\n`;
+  msg += `📅 *${settings.month} ${settings.year}*\n`;
+  msg += `👷 *${collectorLabel}*\n`;
+  if(areaLabel) msg += `📍 *${areaLabel}*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━\n`;
+
+  // Group by area if all collectors, else flat list
+  if(!collector){
+    // Group by collector
+    const collectorGroups = {};
+    filtered.forEach(u=>{
+      const c = u.collector || "Unassigned";
+      if(!collectorGroups[c]) collectorGroups[c] = [];
+      collectorGroups[c].push(u);
+    });
+    Object.entries(collectorGroups).forEach(([cName, cUsers])=>{
+      msg += `\n👷 *${cName}* (${cUsers.length} users)\n`;
+      cUsers.forEach((u,i)=>{
+        const icon = statusIcons[u.status];
+        msg += `${i+1}. ${icon} #${u.id} *${u.name}*`;
+        if(u.area && u.area !== "—") msg += ` · ${u.area}`;
+        msg += `\n`;
+        if(u.status === "PARTIAL"){
+          msg += `   Paid: ৳${u.paid.toLocaleString()} | Due: ৳${u.balance.toLocaleString()}\n`;
+        } else if(u.status === "UNPAID"){
+          msg += `   Due: ৳${u.bill.toLocaleString()}\n`;
+        } else {
+          msg += `   Paid: ৳${u.paid.toLocaleString()} ✓\n`;
+        }
+      });
+    });
+  } else {
+    // Single collector — group by area
+    const areaGroups = {};
+    filtered.forEach(u=>{
+      const a = u.area && u.area !== "—" ? u.area : "Other";
+      if(!areaGroups[a]) areaGroups[a] = [];
+      areaGroups[a].push(u);
+    });
+    Object.entries(areaGroups).forEach(([area, aUsers])=>{
+      msg += `\n📍 *${area}*\n`;
+      aUsers.forEach((u,i)=>{
+        const icon = statusIcons[u.status];
+        msg += `${i+1}. ${icon} #${u.id} *${u.name}*\n`;
+        if(u.status === "PARTIAL"){
+          msg += `   Paid: ৳${u.paid.toLocaleString()} | Due: ৳${u.balance.toLocaleString()}\n`;
+        } else if(u.status === "UNPAID"){
+          msg += `   Due: ৳${u.bill.toLocaleString()}\n`;
+        } else {
+          msg += `   Paid: ৳${u.paid.toLocaleString()} ✓\n`;
+        }
+      });
+    });
+  }
+
+  // Summary footer
+  msg += `\n━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📊 *Summary* (${filtered.length} users)\n`;
+  if(paidCount)    msg += `✅ Paid: ${paidCount}\n`;
+  if(partialCount) msg += `⚠️ Partial: ${partialCount}\n`;
+  if(unpaidCount)  msg += `⛔ Unpaid: ${unpaidCount}\n`;
+  msg += `💰 Billed:    ৳${totalBill.toLocaleString()}\n`;
+  msg += `✅ Collected: ৳${totalPaid.toLocaleString()}\n`;
+  msg += `🔴 Due:       ৳${totalDue.toLocaleString()}\n`;
+  msg += `\n_Generated by ${settings.company}_`;
+
+  return {msg, count: filtered.length};
+}
+
+function renderWAPreview(){
+  const result = buildWAText();
+  const preview = document.getElementById("waPreview");
+  const copyBtn = document.getElementById("waCopyBtn");
+  const openBtn = document.getElementById("waOpenBtn");
+  const charCount = document.getElementById("waCharCount");
+
+  if(!result){
+    preview.textContent = "No users match the selected filters.";
+    preview.style.color = "var(--danger)";
+    copyBtn.style.opacity = ".4"; copyBtn.style.pointerEvents = "none";
+    openBtn.style.opacity = ".4"; openBtn.style.pointerEvents = "none";
+    if(charCount) charCount.textContent = "";
+    return;
+  }
+  preview.textContent = result.msg;
+  preview.style.color = "var(--text)";
+  copyBtn.style.opacity = "1"; copyBtn.style.pointerEvents = "auto";
+  openBtn.style.opacity = "1"; openBtn.style.pointerEvents = "auto";
+  if(charCount) charCount.textContent = `${result.msg.length} chars · ${result.count} users`;
+}
+
+function copyWAText(){
+  const result = buildWAText();
+  if(!result) return;
+  navigator.clipboard.writeText(result.msg).then(()=>{
+    const btn = document.getElementById("waCopyBtn");
+    btn.textContent = "✅ Copied!";
+    setTimeout(()=>btn.textContent="📋 Copy", 2000);
+  }).catch(()=>{
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = result.msg;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    showToast("📋 Copied!");
+  });
+}
+
+function openWhatsApp(){
+  const result = buildWAText();
+  if(!result) return;
+  const encoded = encodeURIComponent(result.msg);
+  window.open(`https://wa.me/?text=${encoded}`, "_blank");
+}
+
+// ── IMPORT ───────────────────────────────────────────────────────
+let pendingImport = [];
+
+const VALID_PACKAGES = ["5 Mbps","10 Mbps","15 Mbps","20 Mbps","30 Mbps","50 Mbps","70 Mbps","90 Mbps","120 Mbps","150 Mbps"];
+
+function openImportModal(){
+  pendingImport=[];
+  document.getElementById("importPreview").style.display="none";
+  document.getElementById("importConfirmBtn").style.display="none";
+  document.getElementById("importFile").value="";
+  document.getElementById("importDrop").innerHTML=`<div class="import-drop-icon">📂</div><div class="import-drop-text">Tap to choose file or <b>drag & drop</b><br><span style="font-size:11px;margin-top:4px;display:block;">.xlsx files only</span></div>`;
+  document.getElementById("importModal").classList.add("open");
+}
+function closeImportModal(e){
+  if(e.target===document.getElementById("importModal")) closeImportModalDirect();
+}
+function closeImportModalDirect(){
+  document.getElementById("importModal").classList.remove("open");
+}
+
+function handleDragOver(e){e.preventDefault();document.getElementById("importDrop").classList.add("dragover");}
+function handleDragLeave(e){document.getElementById("importDrop").classList.remove("dragover");}
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById("importDrop").classList.remove("dragover");
+  const file=e.dataTransfer.files[0];
+  if(file) processExcelFile(file);
+}
+function handleImportFile(e){
+  const file=e.target.files[0];
+  if(file) processExcelFile(file);
+}
+
+async function processExcelFile(file){
+  if(!file.name.match(/\.xlsx?$/i)){showToast("⚠️ Please upload an .xlsx file");return;}
+  document.getElementById("importDrop").innerHTML=`<div class="import-drop-icon">⏳</div><div class="import-drop-text">Reading <b>${file.name}</b>…</div>`;
+
+  if(!window.XLSX){
+    try{ await loadXLSX(); }catch{ showToast("⚠️ Failed to load Excel import tools"); return; }
+  }
+
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:"array"});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      // Auto-detect title row: if first row keys don't look like real column headers
+      // (e.g. a banner like "📋 ISP Bill Collection..."), skip it and re-read from row 1.
+      let rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+      if(rows.length>0){
+        const firstKeys=Object.keys(rows[0]);
+        const hasRealHeaders=firstKeys.some(k=>k.match(/name|id|area|zone|collector|package|pkg|paid|amount|date/i));
+        if(!hasRealHeaders) rows=XLSX.utils.sheet_to_json(ws,{defval:"",range:1});
+      }
+
+      // Try to find columns flexibly
+      const colMap=(row)=>{
+        const keys=Object.keys(row);
+        const find=(...hints)=>keys.find(k=>hints.some(h=>k.toLowerCase().includes(h.toLowerCase())))||null;
+        return {
+          userId: row[find("user id","userid","id","serial","sl","ক্রমিক")||""] || "",
+          name: row[find("name","নাম")||""] || "",
+          area: row[find("area","zone","এলাকা")||""] || "",
+          collector: row[find("collector","collect")||""] || "",
+          pkg: row[find("package","pkg","speed","mbps")||""] || "",
+          paid: row[find("paid","amount","payment","collected")||""] || 0,
+          date: row[find("date","তারিখ")||""] || "",
+        };
+      };
+
+      pendingImport=[];
+      let skipped=0, warned=0, noCollector=0;
+
+      rows.forEach((row,idx)=>{
+        const m=colMap(row);
+        const name=String(m.name||"").trim();
+        if(!name){skipped++;return;}
+        // Find package (flexible match)
+        let pkg=VALID_PACKAGES.find(p=>String(m.pkg||"").trim().toLowerCase()===p.toLowerCase())
+               || VALID_PACKAGES.find(p=>String(m.pkg||"").trim().replace(/\s/g,"").toLowerCase()===p.replace(/\s/g,"").toLowerCase())
+               || "";
+        // Try numeric match (e.g. "10" → "10 Mbps")
+        if(!pkg){
+          const num=String(m.pkg||"").replace(/[^0-9]/g,"");
+          pkg=VALID_PACKAGES.find(p=>p.startsWith(num+" "))||"";
+        }
+        const hasWarn=!pkg;
+        if(hasWarn) warned++;
+        const paid=parseFloat(String(m.paid).replace(/[^0-9.]/g,""))||0;
+        let date=String(m.date||"").trim();
+        // Normalize date: if excel serial, convert
+        if(/^\d{5}$/.test(date)){
+          const d=new Date((parseInt(date)-25569)*86400000);
+          date=d.toISOString().slice(0,10);
+        }
+        const rawId=String(m.userId||"").replace(/[^0-9]/g,"");
+        const userId=parseInt(rawId)||null;
+        const collector=String(m.collector||"").trim();
+        if(!collector) noCollector++;
+        pendingImport.push({
+          userId, name, area:String(m.area||"").trim()||"—",
+          collector,
+          pkg: pkg||"10 Mbps",
+          paid, date,
+          _warn: hasWarn, _origPkg: String(m.pkg||"").trim()
+        });
+      });
+
+      // Preview — deduplicate by ID first, then name
+      const existingIds=new Set(users.map(u=>u.id));
+      const existingNames=new Set(users.map(u=>u.name.toLowerCase()));
+      const newOnes=pendingImport.filter(u=>{
+        if(u.userId && existingIds.has(u.userId)) return false;
+        if(!u.userId && existingNames.has(u.name.toLowerCase())) return false;
+        return true;
+      });
+      const dupes=pendingImport.length-newOnes.length;
+
+      const previewHTML=`
+        <div style="font-weight:700;margin-bottom:8px;">📋 Preview (${file.name})</div>
+        <div class="import-stat"><span>Total rows read</span><span style="font-weight:700;">${rows.length}</span></div>
+        <div class="import-stat"><span>Valid users found</span><span class="import-row-ok" style="font-weight:700;">${pendingImport.length}</span></div>
+        ${dupes?`<div class="import-stat"><span>Skipped (duplicate names)</span><span class="import-row-warn" style="font-weight:700;">${dupes}</span></div>`:""}
+        ${skipped?`<div class="import-stat"><span>Skipped (empty name)</span><span style="font-weight:700;color:var(--text-dim);">${skipped}</span></div>`:""}
+        ${warned?`<div class="import-stat"><span>⚠️ Unknown package → set to 10 Mbps</span><span class="import-row-warn" style="font-weight:700;">${warned}</span></div>`:""}
+        ${noCollector?`<div class="import-stat"><span>👷 No collector → left unassigned</span><span class="import-row-warn" style="font-weight:700;">${noCollector}</span></div>`:""}
+        <div class="import-stat"><span>Will be added</span><span class="import-row-ok" style="font-weight:700;font-size:16px;">${newOnes.length}</span></div>
+        <div style="margin-top:10px;max-height:140px;overflow-y:auto;">
+          ${newOnes.slice(0,8).map(u=>`
+            <div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--surface-2);display:flex;justify-content:space-between;">
+              <span style="font-weight:600;">${u.userId?"#"+u.userId+" ":""}${u.name}</span>
+              <span style="color:var(--text-dim);">${u.area} · ${u.pkg}</span>
+            </div>`).join("")}
+          ${newOnes.length>8?`<div style="color:var(--text-dim);font-size:12px;padding-top:4px;">…and ${newOnes.length-8} more</div>`:""}
+        </div>`;
+
+      document.getElementById("importPreview").style.display="block";
+      document.getElementById("importPreview").innerHTML=previewHTML;
+      document.getElementById("importDrop").innerHTML=`<div class="import-drop-icon">✅</div><div class="import-drop-text"><b>${file.name}</b> loaded<br><span style="font-size:11px;color:var(--success);">${pendingImport.length} users detected</span></div>`;
+
+      if(newOnes.length>0){
+        document.getElementById("importConfirmBtn").style.display="block";
+        document.getElementById("importConfirmBtn").textContent=`✅ Import ${newOnes.length} Users`;
+      } else {
+        document.getElementById("importConfirmBtn").style.display="none";
+        showToast("ℹ️ No new users to import");
+      }
+    } catch(err){
+      showToast("❌ Error reading file");
+      document.getElementById("importDrop").innerHTML=`<div class="import-drop-icon">❌</div><div class="import-drop-text">Could not read file.<br><span style="font-size:11px;">Make sure it's a valid .xlsx</span></div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function confirmImport(){
+  const existingIds=new Set(users.map(u=>u.id));
+  const existingNames=new Set(users.map(u=>u.name.toLowerCase()));
+  let autoId=users.length?Math.max(...users.map(x=>x.id))+1:1;
+  let added=0;
+  pendingImport.forEach(u=>{
+    // Skip duplicates
+    if(u.userId && existingIds.has(u.userId)) return;
+    if(!u.userId && existingNames.has(u.name.toLowerCase())) return;
+    // Assign ID
+    let assignedId;
+    if(u.userId){
+      assignedId=u.userId;
+    } else {
+      // find a free autoId
+      while(existingIds.has(autoId)) autoId++;
+      assignedId=autoId++;
+    }
+    users.push({id:assignedId, name:u.name, area:u.area, collector:u.collector, pkg:u.pkg, paid:u.paid, date:u.date});
+    existingIds.add(assignedId);
+    existingNames.add(u.name.toLowerCase());
+    added++;
+  });
+  invalidateEnrichedCache(); cloudSave(currentMonthKey(),users);
+  closeImportModalDirect();
+  switchTab(1);
+  showToast(`✅ ${added} user${added!==1?"s":""} imported!`);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+(function initLocal(){
+  // Render instantly with whatever is already cached in localStorage,
+  // so the page shows the user's real data immediately instead of a
+  // flash of seed/placeholder content while we wait on the network.
+  if(!settings.collectors) settings.collectors=["Rahim","Karim"];
+  updateCompanyHeader();
+  updateMonthHeader();
+  renderDashboard();
+})();
+
+(async function initCloud(){
+  // Then sync with the cloud in the background and silently refresh
+  // the view if anything changed (no visible "loading" flash).
+  await cloudLoadAll();
+  if(!settings.collectors) settings.collectors=["Rahim","Karim"];
+  updateCompanyHeader();
+  updateMonthHeader();
+  renderDashboard();
+  if(currentTab===1) renderUsers();
+})();
+
+// ── PWA: service worker registration ─────────────────────────────
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('service-worker.js').catch(function(err){
+      console.warn('Service worker registration failed:',err);
+    });
+  });
+}
+
+</script>
+</body>
+</html>
